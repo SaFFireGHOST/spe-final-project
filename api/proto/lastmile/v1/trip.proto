@@ -1,0 +1,19 @@
+syntax = "proto3";
+package lastmile.v1;
+option go_package = "github.com/yourorg/lastmile/api/gen/go/lastmile/v1;lastmilev1";
+import "lastmile/v1/common.proto";
+
+service TripService {
+  rpc CreateTrip(CreateTripRequest) returns (CreateTripResponse);
+  rpc UpdateTripStatus(UpdateTripStatusRequest) returns (UpdateTripStatusResponse);
+}
+
+message CreateTripRequest {
+  string driver_id = 1;
+  repeated string rider_ids = 2;
+  string route_id = 3;
+  string station_id = 4;
+}
+message CreateTripResponse { Trip trip = 1; }
+message UpdateTripStatusRequest { string trip_id = 1; string status = 2; }
+message UpdateTripStatusResponse { Trip trip = 1; }

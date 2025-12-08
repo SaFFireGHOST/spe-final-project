@@ -1,0 +1,24 @@
+FROM python:3.10-slim
+
+WORKDIR /app
+
+# Install system dependencies if needed (e.g. for grpc)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy project definition
+COPY pyproject.toml .
+
+# Install dependencies
+# We install directly from pyproject.toml using pip
+RUN pip install --no-cache-dir .
+
+# Copy source code
+COPY . .
+
+# Set python path to include current directory
+ENV PYTHONPATH=/app
+
+# Default command
+CMD ["python", "services/station_svc.py"]

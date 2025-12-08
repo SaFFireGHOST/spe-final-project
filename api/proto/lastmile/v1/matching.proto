@@ -1,0 +1,25 @@
+syntax = "proto3";
+package lastmile.v1;
+option go_package = "github.com/yourorg/lastmile/api/gen/go/lastmile/v1;lastmilev1";
+
+service MatchingService {
+  rpc TryMatch(TryMatchRequest) returns (TryMatchResponse);
+}
+
+message TryMatchRequest {
+  string driver_id = 1;
+  string route_id = 2;
+  string station_id = 3;
+  int64 arrival_eta_unix = 4;
+}
+
+message Assignment {
+  string rider_request_id = 1;
+  string rider_id = 2;
+}
+
+message TryMatchResponse {
+  string trip_id = 1;
+  repeated Assignment assignments = 2;
+  int32 seats_remaining = 3;
+}

@@ -1,0 +1,11 @@
+syntax = "proto3";
+package lastmile.v1;
+option go_package = "github.com/yourorg/lastmile/api/gen/go/lastmile/v1;lastmilev1";
+
+service NotificationService {
+  rpc Push(PushRequest) returns (PushResponse);
+}
+
+message PushTarget { string user_id = 1; string channel = 2; }
+message PushRequest { repeated PushTarget targets = 1; string title = 2; string body = 3; string data_json = 4; }
+message PushResponse { int32 attempted = 1; int32 success = 2; }

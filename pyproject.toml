@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lastmile"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = [
+  "grpcio>=1.66.0",
+  "grpcio-tools>=1.66.0",
+  "protobuf>=5.27.0",
+  "pymongo>=4.0",
+  "Flask>=3.0",
+  "flask-cors>=5.0",
+]
+
+[tool.setuptools]
+# use package discovery (non-src layout)
+
+[tool.setuptools.packages.find]
+include = ["api*", "common*", "services*"]
+
+[tool.black]
+line-length = 100

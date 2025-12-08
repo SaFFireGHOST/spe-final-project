@@ -1,0 +1,260 @@
+Project Report: LastMile Microservices Application
+1. Assumptions
+Based on the project specification and the requirements for creating a demonstrable microservices-based system, the following assumptions were made:
+Operational Assumptions
+Rider Wait Time: A rider is assumed to wait no more than 10 minutes after their estimated arrival time at the metro station. If no driver match is found by then, the ride request is automatically deleted.
+
+
+Single Active Route per Driver: A driver can maintain only one active route. They may create a new route only after completing the current trip.
+
+
+Single Active Request per Rider: A rider can have only one active ride request. They may create another request only after the previous ride is completed or expires.
+
+
+Simulation Assumptions
+Driver Movement Simulation: Real-time GPS streaming is not feasible for the demo. Therefore, driver movement is simulated starting near one of the stations in their route and progressing sequentially through all metro stations.
+
+
+Proximity-Based Matching: Matching is triggered only when a driver is within 400 meters of a metro station.
+
+
+Matching Timing Preference: Drivers may specify how many minutes before reaching a station they want matching to begin. This ensures matching can start early (to account for delays) but still respects proximity.
+
+
+Technical Assumptions
+Deployment Environment: The system is designed to run on Kubernetes (Minikube).
+
+
+Autoscaling Behavior: Kubernetes HPA uses a default 5-minute scale-down stabilization window.
+
+
+For demonstration purposes, this was reduced to 60 seconds for the Matching Service so scaling behavior could be clearly observed during the demo.
+
+
+Data Persistence: MongoDB must use a Persistent Volume Claim (PVC) to ensure data survives pod restarts.
+
+
+
+2. Design Outline
+The LastMile system is designed using a Microservices Architecture for scalability, modularity, fault isolation, and ease of extension.
+Backend Architecture
+The backend is decomposed into eight independent gRPC microservices, each packaged and deployed separately:
+User Service
+ Handles authentication, authorization, and user profiles.
+
+
+Driver Service
+ Allows creation of routes, updates available seats, and tracks driver state.
+
+
+Rider Service
+ Manages rider requests, arrival time, destination selection, and ride status.
+
+
+Matching Service
+ Matches riders and drivers based on destination, proximity, and timing.
+
+
+Trip Service
+ Manages the trip lifecycle: scheduled → active → completed.
+
+
+Notification Service
+ Sends notifications to riders/drivers using an optimized polling mechanism (simulated push).
+
+
+Location Service
+ Handles driver location updates and triggers matching when a driver is within 400 meters of a station.
+
+
+Station Service
+ Stores metro station metadata and the mapping between stations and nearby localities.
+
+
+Gateway Layer
+A Python-based REST API Gateway acts as the entry point. It receives client requests and forwards them to the relevant microservices via gRPC.
+Infrastructure
+Kubernetes (Minikube): Orchestration, deployment, networking, and autoscaling.
+
+
+Docker: Each microservice has its own Dockerfile and is deployed as an independent container image.
+
+
+MongoDB with PVC: Ensures data durability and avoids data loss during pod restarts.
+
+
+Horizontal Pod Autoscaling:
+
+
+Matching Service scales from 1 → 5 replicas
+
+
+Scale-down stabilization window explicitly set to 60 seconds for demo visibility.
+
+
+Frontend
+Tech Stack: React, Vite, TypeScript
+
+
+Styling: Tailwind CSS
+
+
+Dashboards: Separate Rider and Driver dashboards with real-time updates.
+
+
+Optimized Data Fetching:
+
+
+The app polls only for notifications (simulating push).
+
+
+When a notification arrives, the app fetches only the updated ride/trip data — eliminating unnecessary polling.
+
+
+
+3. Team Contributions
+Koushik
+Backend Architecture & Refactoring
+Converted the initial monolithic backend into eight independently deployable microservices.
+
+
+Created separate Dockerfiles and Kubernetes manifests for each microservice after AI generated a monolithic deployment.
+
+
+Infrastructure & DevOps
+Set up Kubernetes deployments, Services, and MongoDB PVC-based persistence.
+
+
+Configured HPA for the Matching Service and reduced the scale-down stabilization window from 5 minutes to 60 seconds.
+
+
+Core Logic
+Implemented 400m proximity detection in the Location Service.
+
+
+
+Added the matching trigger logic combining proximity + driver-defined early matching window.
+
+
+API Gateway Implementation
+Implemented the Python-based REST API Gateway to bridge the frontend with backend gRPC microservices, handling authentication, routing, and protocol conversion.
+
+
+Load Testing & HPA Verification
+Created a custom gRPC load generator (load_gen.py) to simulate high traffic and verify the Horizontal Pod Autoscaler's behavior under load.
+
+
+
+Harshith
+Frontend Development
+Built the complete Rider and Driver dashboards using React, Vite, TypeScript, and Tailwind.
+
+
+Created Dockerfile, Deployment, and Service configurations for the frontend and API Gateway.
+
+
+Simulation Logic
+Developed the multi-station driver simulation algorithm, handling sequential location updates.
+
+
+Performance Optimization
+
+Replaced AI’s inefficient polling for all data with a notification-store–based model.
+
+
+GeoMap Integration
+Manually integrated the GeoMap component using Leaflet, resolving complex type errors and prop mismatches that AI failed to handle, ensuring accurate station visualization.
+
+
+Robust Error Handling
+Implemented robust error handling and state management in the frontend to ensure a smooth user experience even during network fluctuations.
+
+
+
+
+
+
+4. Use of AI
+The team used Gemini 3 Pro to accelerate development.
+Successful AI Usage
+Generated reusable React components styled with Tailwind.
+
+
+Created boilerplate for .proto definitions, gRPC stubs, and microservice skeletons.
+
+
+Assisted in writing repetitive CRUD operations and basic service logic.
+
+
+
+Where AI Fell Short (Concrete Challenges)
+1. Multi-Station Driver Simulation (Failed)
+AI was unable to:
+Implement sequential movement through multiple metro stations
+
+
+Handle periodic location updates
+
+
+This simulation had to be written manually.
+
+2. GeoMap Component Integration (Failed)
+AI-produced code:
+Contained type errors
+
+
+Provided incorrect/incompatible props
+
+
+Failed to render the map
+
+
+ We manually integrated the component using its official documentation.
+
+3. Microservices Deployment Structure (Major Failure)
+AI incorrectly:
+Packaged the entire backend into one monolithic Docker image, despite generating microservice skeletons.
+
+
+We manually split the code into eight independent Docker images, each with separate Kubernetes Deployments and Services.
+
+4. Autoscaling Behavior (Missing)
+AI did not provide:
+Horizontal Pod Autoscaler configuration
+
+
+Any stabilization behavior for scaling
+
+
+ We added HPA manually and configured the scale-down window to 60 seconds.
+
+5. Real-Time Notifications (Incorrect Implementation)
+AI attempted to implement push notifications but failed, resulting in:
+Heavy polling for riders, drivers, and all resources
+
+
+We replaced this with:
+A notification store
+
+
+Polling only for notifications
+
+
+Fetching actual updated data only when a new notification arrives
+
+
+This drastically reduced load and improved responsiveness.
+
+6. Missing Database Persistence
+AI-generated manifests:
+Did not include a Persistent Volume for MongoDB
+
+
+Caused complete data loss when pods restarted
+
+
+We manually added PVC-based persistence.
+
+Summary
+The LastMile system demonstrates a fully functional microservices architecture capable of matching riders and drivers in real time under simulated conditions. While AI accelerated UI generation and boilerplate creation, it fell short in complex logic, infrastructure, deployment, and real-time mechanisms — requiring extensive manual engineering. The final system is scalable, resilient, and aligned with the project’s functional and architectural requirements.
+

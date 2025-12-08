@@ -1,0 +1,82 @@
+# Steps to Run on Kubernetes
+
+## Prerequisites
+- Docker
+- Kubernetes Cluster (Minikube, Kind, or Docker Desktop)
+- `kubectl` configured
+
+## 1. Build Docker Images
+Run the following commands from the `lastmile` directory:
+
+```bash
+./build_images.sh
+```
+
+> [!IMPORTANT]
+> **If using Minikube**, you must load the images into the Minikube cluster:
+> ```bash
+> ./load_images_minikube.sh
+> ```
+> Alternatively, you can point your shell to Minikube's Docker daemon before building: `eval $(minikube docker-env)`
+
+## 2. Deploy to Kubernetes
+Apply the manifests:
+
+```bash
+kubectl apply -f k8s/
+```
+
+kubectl get pods -w
+```
+
+## 2.1 Initialize Data (Add Stations)
+To add stations to the database, you need to access the MongoDB running in the cluster.
+
+1. Open a new terminal and port-forward MongoDB:
+   ```bash
+   kubectl port-forward svc/mongo 27018:27017
+   ```
+
+2. Run the initialization script locally:
+   ```bash
+   python3 scripts/init_db.py
+   ```
+   This will populate the database with station data.
+
+## 3. Access the Application
+- **Frontend**: http://192.168.49.2:30080 (Minikube IP)
+  > Or run: `minikube service frontend` to open it automatically.
+
+- **Gateway**: http://localhost:5000 (via Port Forward)
+
+To access the Gateway locally if not using NodePort/LoadBalancer:
+```bash
+kubectl port-forward svc/gateway 5000:5000
+```
+
+## 4. Demonstrate Scaling (HPA)
+1. Open a terminal and watch the HPA:
+   ```bash
+   kubectl get hpa -w
+   ```
+
+2. Open another terminal and port-forward the matching service:
+   ```bash
+   kubectl port-forward svc/matching-svc 50057:50057
+   ```
+
+3. Run the load generator script:
+   ```bash
+   python3 scripts/load_gen.py
+   ```
+
+4. Observe the `REPLICAS` count in the HPA terminal increase from 1 to 5 (max).
+
+## 5. Demonstrate Fault Tolerance
+1. While the application is running, delete a matching service pod:python3 scripts/load_gen.py
+   ```bash
+   kubectl delete pod -l app=station-svc
+   ```
+
+2. Kubernetes will automatically recreate the pod.
+3. The load generator (and application) should continue to work with minimal interruption (retries might be needed for in-flight requests, but the system heals).

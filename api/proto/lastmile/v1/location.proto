@@ -1,0 +1,16 @@
+syntax = "proto3";
+package lastmile.v1;
+option go_package = "github.com/yourorg/lastmile/api/gen/go/lastmile/v1;lastmilev1";
+import "lastmile/v1/common.proto";
+
+service LocationService {
+  rpc StreamDriverLocation(stream DriverLocation) returns (LocationStreamAck);
+}
+
+message DriverLocation {
+  string driver_id = 1;
+  LatLng point = 2;
+  int64 ts_unix = 3;
+  string route_id = 4;
+}
+message LocationStreamAck { bool ok = 1; }

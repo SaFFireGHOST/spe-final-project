@@ -1,0 +1,29 @@
+syntax = "proto3";
+package lastmile.v1;
+option go_package = "github.com/yourorg/lastmile/api/gen/go/lastmile/v1;lastmilev1";
+
+message RouteStation { string station_id = 1; int32 minutes_before_eta_match = 2; }
+message DriverRoute {
+  string id = 1;
+  string driver_id = 2;
+  string dest_area = 3;
+  int32 seats_total = 4;
+  int32 seats_free = 5;
+  repeated RouteStation stations = 6;
+}
+
+service DriverService {
+  rpc RegisterRoute(RegisterRouteRequest) returns (RegisterRouteResponse);
+  rpc UpdateSeats(UpdateSeatsRequest) returns (UpdateSeatsResponse);
+  rpc GetRoute(GetRouteRequest) returns (GetRouteResponse);
+  rpc DeleteRoute(DeleteRouteRequest) returns (DeleteRouteResponse);
+}
+
+message RegisterRouteRequest { DriverRoute route = 1; }
+message RegisterRouteResponse { DriverRoute route = 1; }
+message UpdateSeatsRequest { string route_id = 1; int32 seats_free = 2; }
+message UpdateSeatsResponse { DriverRoute route = 1; }
+message GetRouteRequest { string route_id = 1; }
+message GetRouteResponse { DriverRoute route = 1; }
+message DeleteRouteRequest { string route_id = 1; }
+message DeleteRouteResponse { string route_id = 1; }

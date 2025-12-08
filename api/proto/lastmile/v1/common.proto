@@ -1,0 +1,41 @@
+syntax = "proto3";
+package lastmile.v1;
+option go_package = "github.com/yourorg/lastmile/api/gen/go/lastmile/v1;lastmilev1";
+
+message Empty {}
+
+message LatLng { double lat = 1; double lon = 2; }
+
+enum Role { ROLE_UNSPECIFIED = 0; RIDER = 1; DRIVER = 2; }
+
+message User {
+  string id = 1;
+  Role role = 2;
+  string name = 3;
+  string phone = 4;
+}
+
+message Station {
+  string id = 1;
+  string name = 2;
+  LatLng location = 3;
+  repeated string nearby_areas = 4;
+}
+
+message RiderRequest {
+  string id = 1;
+  string rider_id = 2;
+  string station_id = 3;
+  int64 eta_unix = 4;
+  string dest_area = 5;
+  string status = 6; // PENDING/ASSIGNED/CANCELLED
+}
+
+message Trip {
+  string id = 1;
+  string driver_id = 2;
+  repeated string rider_ids = 3;
+  string route_id = 4;
+  string station_id = 5;
+  string status = 6; // SCHEDULED/ACTIVE/COMPLETED/CANCELLED
+}

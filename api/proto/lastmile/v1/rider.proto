@@ -1,0 +1,17 @@
+syntax = "proto3";
+package lastmile.v1;
+option go_package = "github.com/yourorg/lastmile/api/gen/go/lastmile/v1;lastmilev1";
+import "lastmile/v1/common.proto";
+
+service RiderService {
+  rpc AddRequest(AddRequestRequest) returns (AddRequestResponse);
+  rpc ListPendingAtStation(ListPendingAtStationRequest) returns (ListPendingAtStationResponse);
+  rpc MarkAssigned(MarkAssignedRequest) returns (MarkAssignedResponse);
+}
+
+message AddRequestRequest { RiderRequest request = 1; }
+message AddRequestResponse { RiderRequest request = 1; }
+message ListPendingAtStationRequest { string station_id = 1; int64 now_unix = 2; int32 minutes_window = 3; string dest_area = 4; }
+message ListPendingAtStationResponse { repeated RiderRequest requests = 1; }
+message MarkAssignedRequest { repeated string request_ids = 1; string trip_id = 2; }
+message MarkAssignedResponse { int32 updated = 1; }
