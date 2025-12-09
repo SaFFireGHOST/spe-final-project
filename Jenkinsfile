@@ -126,10 +126,10 @@ pipeline {
         withCredentials([file(credentialsId: KUBECONFIG_FILE, variable: 'KUBECONFIG')]) {
           sh "kubectl version"
           sh "kubectl apply -f k8s/namespace.yaml"
-          # Deploy ELK Stack
+          // Deploy ELK Stack
           sh "kubectl create namespace elk || true"
           sh "kubectl apply -f k8s/elk/"
-          # Deploy Application
+          // Deploy Application
           sh "kubectl apply -n lastmile -f k8s/*.yaml"
           sh "kubectl set image deployment/user-svc user-svc=${REGISTRY}/user-svc:${IMAGE_TAG} -n lastmile --record"
           sh "kubectl set image deployment/station-svc station-svc=${REGISTRY}/station-svc:${IMAGE_TAG} -n lastmile --record"
