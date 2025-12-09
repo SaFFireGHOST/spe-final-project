@@ -83,19 +83,11 @@ pipeline {
             'gateway-svc': 'Dockerfile.gateway'
           ]
           
-          def parallelBuilds = [:]
-          
           svcFiles.each { name, dockerfile ->
-            parallelBuilds[name] = {
-              sh "docker build -f ${dockerfile} -t ${REGISTRY}/${name}:${IMAGE_TAG} -t ${REGISTRY}/${name}:latest ."
-            }
+            sh "docker build -f ${dockerfile} -t ${REGISTRY}/${name}:${IMAGE_TAG} -t ${REGISTRY}/${name}:latest ."
           }
           
-          parallelBuilds['frontend'] = {
-             sh "docker build -t ${REGISTRY}/lastmile-frontend:${IMAGE_TAG} -t ${REGISTRY}/lastmile-frontend:latest -f frontend/Dockerfile frontend"
-          }
-          
-          parallel(parallelBuilds)
+          sh "docker build -t ${REGISTRY}/lastmile-frontend:${IMAGE_TAG} -t ${REGISTRY}/lastmile-frontend:latest -f frontend/Dockerfile frontend"
         }
       }
     }
