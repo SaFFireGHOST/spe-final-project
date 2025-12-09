@@ -124,7 +124,7 @@ pipeline {
     stage('Deploy to Kubernetes') {
       steps {
         withCredentials([file(credentialsId: KUBECONFIG_FILE, variable: 'KUBECONFIG')]) {
-          sh "kubectl version --short"
+          sh "kubectl version"
           sh "kubectl apply -f k8s/namespace.yaml"
           sh "kubectl apply -n lastmile -f k8s/*.yaml"
           sh "kubectl set image deployment/user-svc user-svc=${REGISTRY}/user-svc:${IMAGE_TAG} -n lastmile --record"
