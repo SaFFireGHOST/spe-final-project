@@ -34,6 +34,7 @@ pipeline {
         sh "python${PYTHON_VERSION} -m venv .venv"
         sh ". .venv/bin/activate && pip install --upgrade pip wheel"
         sh ". .venv/bin/activate && pip install -e ."
+        sh ". .venv/bin/activate && pip install ansible"
       }
     }
 
@@ -125,22 +126,7 @@ pipeline {
       steps {
         withCredentials([file(credentialsId: KUBECONFIG_FILE, variable: 'KUBECONFIG')]) {
           sh "kubectl version"
-          sh "kubectl apply -f k8s/namespace.yaml"
-          // Deploy ELK Stack
-          sh "kubectl create namespace elk || true"
-          sh "kubectl apply -f k8s/elk/"
-          // Deploy Application
-          sh "kubectl apply -n lastmile -f k8s/*.yaml"
-          sh "kubectl set image deployment/user-svc user-svc=${REGISTRY}/user-svc:${IMAGE_TAG} -n lastmile --record"
-          sh "kubectl set image deployment/station-svc station-svc=${REGISTRY}/station-svc:${IMAGE_TAG} -n lastmile --record"
-          sh "kubectl set image deployment/driver-svc driver-svc=${REGISTRY}/driver-svc:${IMAGE_TAG} -n lastmile --record"
-          sh "kubectl set image deployment/rider-svc rider-svc=${REGISTRY}/rider-svc:${IMAGE_TAG} -n lastmile --record"
-          sh "kubectl set image deployment/trip-svc trip-svc=${REGISTRY}/trip-svc:${IMAGE_TAG} -n lastmile --record"
-          sh "kubectl set image deployment/notification-svc notification-svc=${REGISTRY}/notification-svc:${IMAGE_TAG} -n lastmile --record"
-          sh "kubectl set image deployment/matching-svc matching-svc=${REGISTRY}/matching-svc:${IMAGE_TAG} -n lastmile --record"
-          sh "kubectl set image deployment/location-svc location-svc=${REGISTRY}/location-svc:${IMAGE_TAG} -n lastmile --record"
-          sh "kubectl set image deployment/gateway gateway=${REGISTRY}/gateway-svc:${IMAGE_TAG} -n lastmile --record"
-          sh "kubectl set image deployment/frontend frontend=${REGISTRY}/lastmile-frontend:${IMAGE_TAG} -n lastmile --record"
+          sh ". .venv/bin/activate && ansible-playbook -i ansible/inventory ansible/deploy.yml --extra-vars \"image_tag=${IMAGE_TAG} registry=${REGISTRY} mongo_uri=mongodb://mongo:27017\" --vault-password-file ansible/vault_pass.txt"
         }
       }
     }
