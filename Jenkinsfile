@@ -46,13 +46,22 @@ pipeline {
 
     stage('Unit Tests') {
       steps {
-        sh ". .venv/bin/activate && pytest --maxfail=1 --disable-warnings -q || true"
+        sh ". .venv/bin/activate && python3 -m pytest --maxfail=1 --disable-warnings -q || true"
+      }
+    }
+
+    stage('Frontend Tests') {
+      steps {
+        dir('frontend') {
+          sh "npm install"
+          sh "npm test -- --run"
+        }
       }
     }
 
     stage('SAST & Secret Scan') {
       steps {
-        sh ". .venv/bin/activate && pip install bandit gitleaks pip-audit"
+        sh ". .venv/bin/activate && pip install bandit pip-audit"
         sh ". .venv/bin/activate && bandit -r services common gateway.py -c bandit.yml"
         sh "gitleaks detect -c .gitleaks.toml --no-banner || true"
         sh ". .venv/bin/activate && pip-audit || true"
