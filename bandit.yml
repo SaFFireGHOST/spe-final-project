@@ -1,4 +1,4 @@
 # Bandit configuration for LastMile
 skips: ['B101', 'B603']
-tests: ['B201', 'B301', 'B403', 'B404', 'B603']
+tests: ['B201', 'B301', 'B403', 'B404']
 exclude_dirs: ['.venv', 'frontend', 'lastmile']
