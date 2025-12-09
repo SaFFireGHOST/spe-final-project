@@ -37,6 +37,13 @@ pipeline {
       }
     }
 
+    stage('Linting') {
+      steps {
+        sh ". .venv/bin/activate && pip install flake8"
+        sh ". .venv/bin/activate && flake8 services common gateway.py --count --select=E9,F63,F7,F82 --show-source --statistics"
+      }
+    }
+
     stage('Unit Tests') {
       steps {
         sh ". .venv/bin/activate && pytest --maxfail=1 --disable-warnings -q || true"
@@ -56,27 +63,44 @@ pipeline {
       steps {
         script {
           def svcFiles = [
-            [name: 'user-svc', dockerfile: 'Dockerfile.user'],
-            [name: 'station-svc', dockerfile: 'Dockerfile.station'],
-            [name: 'driver-svc', dockerfile: 'Dockerfile.driver'],
-            [name: 'rider-svc', dockerfile: 'Dockerfile.rider'],
-            [name: 'trip-svc', dockerfile: 'Dockerfile.trip'],
-            [name: 'notification-svc', dockerfile: 'Dockerfile.notification'],
-            [name: 'matching-svc', dockerfile: 'Dockerfile.matching'],
-            [name: 'location-svc', dockerfile: 'Dockerfile.location'],
-            [name: 'gateway-svc', dockerfile: 'Dockerfile.gateway']
+            'user-svc': 'Dockerfile.user',
+            'station-svc': 'Dockerfile.station',
+            'driver-svc': 'Dockerfile.driver',
+            'rider-svc': 'Dockerfile.rider',
+            'trip-svc': 'Dockerfile.trip',
+            'notification-svc': 'Dockerfile.notification',
+            'matching-svc': 'Dockerfile.matching',
+            'location-svc': 'Dockerfile.location',
+            'gateway-svc': 'Dockerfile.gateway'
           ]
-          svcFiles.each { svc ->
-            sh "docker build -f ${svc.dockerfile} -t ${REGISTRY}/${svc.name}:${IMAGE_TAG} -t ${REGISTRY}/${svc.name}:latest ."
+          
+          def parallelBuilds = [:]
+          
+          svcFiles.each { name, dockerfile ->
+            parallelBuilds[name] = {
+              sh "docker build -f ${dockerfile} -t ${REGISTRY}/${name}:${IMAGE_TAG} -t ${REGISTRY}/${name}:latest ."
+            }
           }
-          sh "docker build -t ${REGISTRY}/lastmile-frontend:${IMAGE_TAG} -t ${REGISTRY}/lastmile-frontend:latest -f frontend/Dockerfile frontend"
+          
+          parallelBuilds['frontend'] = {
+             sh "docker build -t ${REGISTRY}/lastmile-frontend:${IMAGE_TAG} -t ${REGISTRY}/lastmile-frontend:latest -f frontend/Dockerfile frontend"
+          }
+          
+          parallel(parallelBuilds)
         }
       }
     }
 
     stage('Container Scan (Trivy)') {
       steps {
-        sh "docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --severity HIGH,CRITICAL ${REGISTRY}/gateway-svc:${IMAGE_TAG} || true"
+        script {
+           def services = ['user-svc', 'station-svc', 'driver-svc', 'rider-svc', 'trip-svc', 'notification-svc', 'matching-svc', 'location-svc', 'gateway-svc']
+           
+           services.each { svc ->
+             echo "Scanning ${svc}..."
+             sh "docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --severity HIGH,CRITICAL ${REGISTRY}/${svc}:${IMAGE_TAG} || true"
+           }
+        }
       }
     }
 
