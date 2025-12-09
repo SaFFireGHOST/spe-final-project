@@ -22,34 +22,33 @@
    ```
 3) Deploy namespace and manifests:
    ```bash
-   kubectl apply -f k8s/namespace.yaml
-   kubectl apply -n lastmile -f k8s/*.yaml
+   kubectl apply -f k8s
    ```
 4) Wait for readiness:
    ```bash
-   kubectl get pods -n lastmile -w
+   kubectl get pods -w
    ```
    Expected: all pods reach `Running` with `1/1` ready.
 5) Init data (stations):
    ```bash
-   kubectl port-forward -n lastmile svc/mongo 27018:27017
+   kubectl port-forward svc/mongo 27019:27017
    python3 scripts/init_db.py
    ```
    Expected: script prints inserted station count; no exceptions.
 6) Access:
-   - Frontend: `minikube service frontend -n lastmile` or NodePort IP: `http://<minikube-ip>:30080`.
-   - Gateway: `kubectl port-forward -n lastmile svc/gateway 5000:5000` → http://localhost:5000
+   - Frontend: `minikube service frontend` or NodePort IP: `http://<minikube-ip>:30081`.
+   - Gateway: `kubectl port-forward svc/gateway 5000:5000` → http://localhost:5000
    - Health check: `curl http://localhost:5000/health` → `{"status":"ok"}`.
 7) HPA demo (matching-svc):
    ```bash
-   kubectl get hpa -n lastmile -w
-   kubectl port-forward -n lastmile svc/matching-svc 50057:50057 &
+   kubectl get hpa -w
+   kubectl port-forward svc/matching-svc 50057:50057 &
    python3 scripts/load_gen.py
    ```
    Expected: HPA `REPLICAS` scales above 1 under load, then scales down after load stops.
 8) Fault tolerance demo:
    ```bash
-   kubectl delete pod -n lastmile -l app=station-svc
+   kubectl delete pod -l app=station-svc
    ```
    Expected: pod recreated automatically; `kubectl get pods` shows new pod Running; app stays responsive.
 
@@ -74,7 +73,7 @@ Expected: Docker/Jenkins/K8s installed, cluster ready, app deployed to `lastmile
    ```
 2) Access Kibana:
    ```bash
-   kubectl port-forward -n elk svc/kibana 5601:5601
+   kubectl port-forward svc/kibana 5601:5601
    ```
    Open http://localhost:5601.
 3) Expected: Filebeat ships container logs; discover index `filebeat-*` in Kibana and see gateway/service logs.
