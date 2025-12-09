@@ -5,7 +5,7 @@ pipeline {
     REGISTRY = "docker.io/${DOCKERHUB_USERNAME}"
     IMAGE_TAG = "${env.BUILD_NUMBER}"
     PYTHON_VERSION = "3"
-    DOCKER_CREDENTIALS = 'dockerhub-credentials'
+    DOCKER_CREDENTIALS = 'dockerhub-creds'
     KUBECONFIG_FILE = 'kubeconfig'
   }
 
