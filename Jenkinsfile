@@ -2,10 +2,10 @@ pipeline {
   agent any
 
   environment {
-    REGISTRY = "docker.io/${DOCKERHUB_USERNAME}"
+    DOCKERHUB_CREDS = credentials('dockerhub-creds')
+    REGISTRY = "docker.io/${DOCKERHUB_CREDS_USR}"
     IMAGE_TAG = "${env.BUILD_NUMBER}"
     PYTHON_VERSION = "3"
-    DOCKER_CREDENTIALS = 'dockerhub-creds'
     KUBECONFIG_FILE = 'kubeconfig'
   }
 
@@ -107,8 +107,7 @@ pipeline {
 
     stage('Push Images') {
       steps {
-        withCredentials([usernamePassword(credentialsId: DOCKER_CREDENTIALS, usernameVariable: 'DOCKERHUB_USERNAME', passwordVariable: 'DOCKERHUB_PASSWORD')]) {
-          sh "echo $DOCKERHUB_PASSWORD | docker login -u $DOCKERHUB_USERNAME --password-stdin"
+          sh "echo $DOCKERHUB_CREDS_PSW | docker login -u $DOCKERHUB_CREDS_USR --password-stdin"
           sh "docker push ${REGISTRY}/user-svc:${IMAGE_TAG} && docker push ${REGISTRY}/user-svc:latest"
           sh "docker push ${REGISTRY}/station-svc:${IMAGE_TAG} && docker push ${REGISTRY}/station-svc:latest"
           sh "docker push ${REGISTRY}/driver-svc:${IMAGE_TAG} && docker push ${REGISTRY}/driver-svc:latest"
@@ -119,7 +118,6 @@ pipeline {
           sh "docker push ${REGISTRY}/location-svc:${IMAGE_TAG} && docker push ${REGISTRY}/location-svc:latest"
           sh "docker push ${REGISTRY}/gateway-svc:${IMAGE_TAG} && docker push ${REGISTRY}/gateway-svc:latest"
           sh "docker push ${REGISTRY}/lastmile-frontend:${IMAGE_TAG} && docker push ${REGISTRY}/lastmile-frontend:latest"
-        }
       }
     }
 
