@@ -35,12 +35,15 @@ spec:
           value: single-node
         - name: ES_JAVA_OPTS
           value: "-Xms512m -Xmx512m"
+        - name: ELASTIC_PASSWORD     
+          value: "password123"
+        - name: cluster.routing.allocation.disk.threshold_enabled
+          value: "false"
         resources:
           requests:
             cpu: "250m"
             memory: "1Gi"
           limits:
-            cpu: "500m"
             memory: "2Gi"
         ports:
         - containerPort: 9200

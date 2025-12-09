@@ -12,7 +12,18 @@
    - Frontend reachable at http://localhost:3000.
 4) Quick check: `curl http://localhost:5000/health` returns `{"status":"ok"}`.
 
-## B. Kubernetes (full stack)
+## B. Testing
+1) Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   pip install pytest
+   ```
+2) Run tests:
+   ```bash
+   pytest tests/
+   ```
+
+## C. Kubernetes (full stack)
 1) Prereqs: `kubectl`, Kubernetes cluster (Minikube/Kind/remote), Docker.
 2) Build and (if Minikube) load images:
    ```bash
@@ -52,31 +63,40 @@
    ```
    Expected: pod recreated automatically; `kubectl get pods` shows new pod Running; app stays responsive.
 
-## C. CI/CD (Jenkins pipeline)
+## D. CI/CD (Jenkins pipeline)
 1) Create Jenkins job using repo `Jenkinsfile`.
 2) Credentials required:
    - `dockerhub-credentials` (user/pass)
    - `kubeconfig` (secret file credential)
 3) GitHub webhook: `http://<jenkins-url>/github-webhook/`.
-4) Expected pipeline flow: checkout → venv setup → tests → Bandit/Gitleaks/pip-audit → build images → Trivy scan → push images → `kubectl apply` + `set image` in `lastmile` namespace. Green build indicates deploy succeeded.
+4) Expected pipeline flow: checkout → venv setup → tests → Bandit/Gitleaks/pip-audit → build images → Trivy scan → push images → `kubectl apply` + `set image` in `default` namespace. Green build indicates deploy succeeded.
 
-## D. Ansible provisioning (optional)
+## E. Ansible provisioning (optional)
 Run infra + app provisioning from your control host:
 ```bash
 ansible-playbook -i ansible/inventory.ini ansible/playbooks/site.yml --extra-vars "kube_join_command=<worker-join-cmd>"
 ```
-Expected: Docker/Jenkins/K8s installed, cluster ready, app deployed to `lastmile`; `kubectl get pods -n lastmile` shows pods Running.
-## E. Observability (ELK)
+Expected: Docker/Jenkins/K8s installed, cluster ready, app deployed to `default`; `kubectl get pods` shows pods Running.
+## F. Observability (ELK)
 1) Deploy stack:
    ```bash
    kubectl apply -f k8s/elk/
    ```
-2) Access Kibana:
+2) Configure Kibana:
+   - Generate Enrollment Token:
+     ```bash
+     kubectl exec -it $(kubectl get pods -l app=elasticsearch -o jsonpath="{.items[0].metadata.name}") -- bin/elasticsearch-create-enrollment-token -s kibana
+     ```
+   - Get Verification Code (if prompted):
+     ```bash
+     kubectl logs -l app=kibana
+     ```
+3) Access Kibana:
    ```bash
    kubectl port-forward svc/kibana 5601:5601
    ```
    Open http://localhost:5601.
-3) Expected: Filebeat ships container logs; discover index `filebeat-*` in Kibana and see gateway/service logs.
+4) Expected: Filebeat ships container logs; discover index `filebeat-*` in Kibana and see gateway/service logs.
 
 ## F. Vault-based Secrets (optional)
 1) Ensure Vault injector is installed in cluster.
