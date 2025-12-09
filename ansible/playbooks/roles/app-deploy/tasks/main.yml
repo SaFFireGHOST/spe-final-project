@@ -1,0 +1,26 @@
+---
+- name: Create namespace for app
+  become_user: "{{ ansible_user }}"
+  shell: kubectl create namespace lastmile --dry-run=client -o yaml | kubectl apply -f -
+
+- name: Apply Kubernetes manifests
+  become_user: "{{ ansible_user }}"
+  shell: kubectl apply -n lastmile -f k8s/*.yaml
+
+- name: Set image pull secret (if provided)
+  become_user: "{{ ansible_user }}"
+  shell: |
+    if [ -n "${DOCKER_REGISTRY_JSON:-}" ]; then
+      echo "${DOCKER_REGISTRY_JSON}" | kubectl apply -f -
+    fi
+  args:
+    executable: /bin/bash
+  environment:
+    DOCKER_REGISTRY_JSON: "{{ docker_registry_secret | default('') }}"
+
+- name: Wait for deployments
+  become_user: "{{ ansible_user }}"
+  shell: |
+    kubectl rollout status deployment/user-svc -n lastmile --timeout=180s
+    kubectl rollout status deployment/gateway -n lastmile --timeout=180s
+    kubectl rollout status deployment/frontend -n lastmile --timeout=180s

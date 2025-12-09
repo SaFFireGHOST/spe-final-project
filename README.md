@@ -20,6 +20,29 @@ The system is composed of several loosely coupled microservices communicating vi
 *   **Backend**: Python 3.11+, gRPC (asyncio), MongoDB
 *   **Frontend**: React, Vite, TailwindCSS
 *   **Infrastructure**: Kubernetes, Docker, Helm (optional)
+*   **DevSecOps**: Jenkins pipeline, Ansible provisioning, Docker Compose for local, ELK logging, HPA autoscaling, Bandit/Gitleaks/Trivy scans, Vault-ready secrets
+
+## 🔁 CI/CD and Release Flow
+
+1. **GitHub webhook / poll** triggers Jenkins (`Jenkinsfile`).
+2. Pipeline stages: checkout → venv setup → tests → SAST & secret scan (Bandit, Gitleaks, pip-audit) → Docker image build → Trivy container scan → push to Docker Hub → deploy to Kubernetes (lastmile namespace) with rolling updates + HPA already configured.
+3. Kube config and Docker Hub creds are injected as Jenkins credentials (`kubeconfig`, `dockerhub-credentials`).
+4. Images are tagged with the Jenkins build number and `latest`, then rolled out via `kubectl set image` to each Deployment.
+
+## 🔒 Security / DevSecOps
+
+* **Static analysis**: `bandit -r services common gateway.py -c bandit.yml`.
+* **Dependency audit**: `pip-audit` in CI.
+* **Secret scanning**: `gitleaks detect -c .gitleaks.toml`.
+* **Container scan**: Trivy against built images; ignores can be added to `.trivyignore`.
+* **Secrets management**: `k8s/vault-agent-example.yaml` shows Vault Agent injection for runtime secrets; use Vault roles + service accounts instead of embedding secrets.
+
+## 🧰 Ops Runbook (short)
+
+* **Local dev (compose)**: `docker compose up --build` to boot Mongo + all services + gateway + frontend.
+* **Kubernetes**: `kubectl apply -f k8s/namespace.yaml && kubectl apply -n lastmile -f k8s/`.
+* **ELK logging**: `k8s/elk/*` deploys Elasticsearch + Kibana + Filebeat; Filebeat tails `/var/log/containers/*.log` and ships to Elasticsearch.
+* **Jenkins in-cluster (optional)**: `kubectl apply -f k8s/jenkins.yaml` to provision a NodePort Jenkins (namespace `cicd`).
 
 ## 🚀 Running the Application
 

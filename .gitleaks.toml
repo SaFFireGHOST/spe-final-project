@@ -1,0 +1,9 @@
+title = "LastMile Gitleaks"
+
+[[rules]]
+id = "generic-api-key"
+regex = '''(?i)(api|token|key)[=:]\s*[A-Za-z0-9_\-]{16,}'''
+tags = ["key", "generic"]
+
+[allowlist]
+files = ["docs/", "frontend/" ]

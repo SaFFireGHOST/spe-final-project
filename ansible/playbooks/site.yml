@@ -1,0 +1,30 @@
+---
+- name: Prepare Jenkins node
+  hosts: jenkins
+  become: true
+  roles:
+    - common
+    - docker
+    - jenkins
+
+- name: Prepare Kubernetes control plane
+  hosts: controllers
+  become: true
+  roles:
+    - common
+    - docker
+    - k8s-control
+
+- name: Prepare Kubernetes workers
+  hosts: workers
+  become: true
+  roles:
+    - common
+    - docker
+    - k8s-worker
+
+- name: Deploy LastMile to Kubernetes
+  hosts: controllers
+  become: true
+  roles:
+    - app-deploy

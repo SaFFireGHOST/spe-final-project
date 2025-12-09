@@ -1,0 +1,150 @@
+version: "3.9"
+
+services:
+  mongo:
+    image: mongo:6.0
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo-data:/data/db
+
+  user-svc:
+    build:
+      context: .
+      dockerfile: Dockerfile.user
+    image: user-svc:dev
+    command: ["python", "services/user_svc.py"]
+    environment:
+      MONGO_URI: mongodb://mongo:27017
+    depends_on:
+      - mongo
+
+  station-svc:
+    build:
+      context: .
+      dockerfile: Dockerfile.station
+    image: station-svc:dev
+    command: ["python", "services/station_svc.py"]
+    environment:
+      MONGO_URI: mongodb://mongo:27017
+    depends_on:
+      - mongo
+
+  driver-svc:
+    build:
+      context: .
+      dockerfile: Dockerfile.driver
+    image: driver-svc:dev
+    command: ["python", "services/driver_svc.py"]
+    environment:
+      MONGO_URI: mongodb://mongo:27017
+    depends_on:
+      - mongo
+
+  rider-svc:
+    build:
+      context: .
+      dockerfile: Dockerfile.rider
+    image: rider-svc:dev
+    command: ["python", "services/rider_svc.py"]
+    environment:
+      MONGO_URI: mongodb://mongo:27017
+    depends_on:
+      - mongo
+
+  trip-svc:
+    build:
+      context: .
+      dockerfile: Dockerfile.trip
+    image: trip-svc:dev
+    command: ["python", "services/trip_svc.py"]
+    environment:
+      MONGO_URI: mongodb://mongo:27017
+      NOTIFY_ADDR: notification-svc:50056
+    depends_on:
+      - notification-svc
+      - mongo
+
+  notification-svc:
+    build:
+      context: .
+      dockerfile: Dockerfile.notification
+    image: notification-svc:dev
+    command: ["python", "services/notification_svc.py"]
+    environment:
+      MONGO_URI: mongodb://mongo:27017
+    depends_on:
+      - mongo
+
+  matching-svc:
+    build:
+      context: .
+      dockerfile: Dockerfile.matching
+    image: matching-svc:dev
+    command: ["python", "services/matching_svc.py"]
+    environment:
+      DRIVER_ADDR: driver-svc:50053
+      RIDER_ADDR: rider-svc:50054
+      TRIP_ADDR: trip-svc:50055
+      NOTIFY_ADDR: notification-svc:50056
+    depends_on:
+      - driver-svc
+      - rider-svc
+      - trip-svc
+      - notification-svc
+
+  location-svc:
+    build:
+      context: .
+      dockerfile: Dockerfile.location
+    image: location-svc:dev
+    command: ["python", "services/location_svc.py"]
+    environment:
+      MATCH_ADDR: matching-svc:50057
+      STATION_ADDR: station-svc:50052
+      DRIVER_ADDR: driver-svc:50053
+    depends_on:
+      - matching-svc
+      - station-svc
+      - driver-svc
+
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.gateway
+    image: gateway-svc:dev
+    command: ["python", "gateway.py"]
+    ports:
+      - "5000:5000"
+    environment:
+      USER_ADDR: user-svc:50051
+      STATION_ADDR: station-svc:50052
+      DRIVER_ADDR: driver-svc:50053
+      RIDER_ADDR: rider-svc:50054
+      LOCATION_ADDR: location-svc:50058
+      TRIP_ADDR: trip-svc:50055
+      MONGO_URI: mongodb://mongo:27017
+    depends_on:
+      - user-svc
+      - station-svc
+      - driver-svc
+      - rider-svc
+      - location-svc
+      - trip-svc
+      - mongo
+
+  frontend:
+    build:
+      context: frontend
+      dockerfile: Dockerfile
+    image: lastmile-frontend:dev
+    environment:
+      VITE_GATEWAY_URL: http://localhost:5000
+    ports:
+      - "3000:80"
+    depends_on:
+      - gateway
+
+volumes:
+  mongo-data:

@@ -1,0 +1,59 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: security
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: gateway-vault
+  namespace: default
+  annotations:
+    vault.hashicorp.com/role: gateway-app
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway-secure
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gateway-secure
+  template:
+    metadata:
+      labels:
+        app: gateway-secure
+      annotations:
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/agent-inject-secret-config: "secret/data/gateway"
+        vault.hashicorp.com/agent-inject-template-config: |
+          {{ with secret "secret/data/gateway" }}
+          MONGO_URI={{ .Data.data.MONGO_URI }}
+          JWT_SECRET={{ .Data.data.JWT_SECRET }}
+          {{ end }}
+    spec:
+      serviceAccountName: gateway-vault
+      containers:
+      - name: gateway
+        image: gateway-svc:latest
+        envFrom:
+        - secretRef:
+            name: gateway-vault-config
+        command: ["python", "gateway.py"]
+        resources:
+          requests:
+            cpu: "150m"
+            memory: "256Mi"
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: gateway-vault-config
+  namespace: default
+stringData:
+  placeholder: "vault-agent-will-inject"

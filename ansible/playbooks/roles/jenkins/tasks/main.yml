@@ -1,0 +1,39 @@
+---
+- name: Install Java for Jenkins
+  apt:
+    name: openjdk-17-jdk
+    state: present
+    update_cache: true
+
+- name: Add Jenkins key
+  apt_key:
+    url: https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key
+    state: present
+
+- name: Add Jenkins repo
+  apt_repository:
+    repo: deb https://pkg.jenkins.io/debian-stable binary/
+    state: present
+    filename: jenkins
+
+- name: Install Jenkins
+  apt:
+    name: jenkins
+    state: present
+    update_cache: true
+
+- name: Ensure Jenkins is running
+  service:
+    name: jenkins
+    state: started
+    enabled: true
+
+- name: Install Jenkins CLI plugins
+  shell: |
+    JENKINS_URL=http://localhost:8080
+    JENKINS_CLI=/usr/share/jenkins/jenkins-cli.jar
+    ADMIN_PASS=$(cat /var/lib/jenkins/secrets/initialAdminPassword)
+    java -jar ${JENKINS_CLI} -s ${JENKINS_URL} -auth admin:${ADMIN_PASS} install-plugin git workflow-aggregator github-branch-source docker-workflow credentials-binding ssh-agent kubernetes
+  args:
+    creates: /var/lib/jenkins/plugins/docker-workflow.jpi
+  changed_when: false

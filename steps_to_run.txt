@@ -1,82 +1,88 @@
-# Steps to Run on Kubernetes
+# Steps to Run and Verify
 
-## Prerequisites
-- Docker
-- Kubernetes Cluster (Minikube, Kind, or Docker Desktop)
-- `kubectl` configured
-
-## 1. Build Docker Images
-Run the following commands from the `lastmile` directory:
-
-```bash
-./build_images.sh
-```
-
-> [!IMPORTANT]
-> **If using Minikube**, you must load the images into the Minikube cluster:
-> ```bash
-> ./load_images_minikube.sh
-> ```
-> Alternatively, you can point your shell to Minikube's Docker daemon before building: `eval $(minikube docker-env)`
-
-## 2. Deploy to Kubernetes
-Apply the manifests:
-
-```bash
-kubectl apply -f k8s/
-```
-
-kubectl get pods -w
-```
-
-## 2.1 Initialize Data (Add Stations)
-To add stations to the database, you need to access the MongoDB running in the cluster.
-
-1. Open a new terminal and port-forward MongoDB:
+## A. Local (Docker Compose)
+1) Prereqs: Docker (with compose plugin), Node 18+ if building frontend locally.
+2) Run:
    ```bash
-   kubectl port-forward svc/mongo 27018:27017
+   docker compose up --build
    ```
+3) Expected outputs:
+   - Containers healthy; `docker compose ps` shows all `Up`.
+   - Gateway logs show `* Running on http://0.0.0.0:5000`.
+   - Frontend reachable at http://localhost:3000.
+4) Quick check: `curl http://localhost:5000/health` returns `{"status":"ok"}`.
 
-2. Run the initialization script locally:
+## B. Kubernetes (full stack)
+1) Prereqs: `kubectl`, Kubernetes cluster (Minikube/Kind/remote), Docker.
+2) Build and (if Minikube) load images:
    ```bash
+   ./build_images.sh
+   # Minikube only
+   ./load_images_minikube.sh
+   ```
+3) Deploy namespace and manifests:
+   ```bash
+   kubectl apply -f k8s/namespace.yaml
+   kubectl apply -n lastmile -f k8s/*.yaml
+   ```
+4) Wait for readiness:
+   ```bash
+   kubectl get pods -n lastmile -w
+   ```
+   Expected: all pods reach `Running` with `1/1` ready.
+5) Init data (stations):
+   ```bash
+   kubectl port-forward -n lastmile svc/mongo 27018:27017
    python3 scripts/init_db.py
    ```
-   This will populate the database with station data.
-
-## 3. Access the Application
-- **Frontend**: http://192.168.49.2:30080 (Minikube IP)
-  > Or run: `minikube service frontend` to open it automatically.
-
-- **Gateway**: http://localhost:5000 (via Port Forward)
-
-To access the Gateway locally if not using NodePort/LoadBalancer:
-```bash
-kubectl port-forward svc/gateway 5000:5000
-```
-
-## 4. Demonstrate Scaling (HPA)
-1. Open a terminal and watch the HPA:
+   Expected: script prints inserted station count; no exceptions.
+6) Access:
+   - Frontend: `minikube service frontend -n lastmile` or NodePort IP: `http://<minikube-ip>:30080`.
+   - Gateway: `kubectl port-forward -n lastmile svc/gateway 5000:5000` → http://localhost:5000
+   - Health check: `curl http://localhost:5000/health` → `{"status":"ok"}`.
+7) HPA demo (matching-svc):
    ```bash
-   kubectl get hpa -w
-   ```
-
-2. Open another terminal and port-forward the matching service:
-   ```bash
-   kubectl port-forward svc/matching-svc 50057:50057
-   ```
-
-3. Run the load generator script:
-   ```bash
+   kubectl get hpa -n lastmile -w
+   kubectl port-forward -n lastmile svc/matching-svc 50057:50057 &
    python3 scripts/load_gen.py
    ```
-
-4. Observe the `REPLICAS` count in the HPA terminal increase from 1 to 5 (max).
-
-## 5. Demonstrate Fault Tolerance
-1. While the application is running, delete a matching service pod:python3 scripts/load_gen.py
+   Expected: HPA `REPLICAS` scales above 1 under load, then scales down after load stops.
+8) Fault tolerance demo:
    ```bash
-   kubectl delete pod -l app=station-svc
+   kubectl delete pod -n lastmile -l app=station-svc
    ```
+   Expected: pod recreated automatically; `kubectl get pods` shows new pod Running; app stays responsive.
 
-2. Kubernetes will automatically recreate the pod.
-3. The load generator (and application) should continue to work with minimal interruption (retries might be needed for in-flight requests, but the system heals).
+## C. CI/CD (Jenkins pipeline)
+1) Create Jenkins job using repo `Jenkinsfile`.
+2) Credentials required:
+   - `dockerhub-credentials` (user/pass)
+   - `kubeconfig` (secret file credential)
+3) GitHub webhook: `http://<jenkins-url>/github-webhook/`.
+4) Expected pipeline flow: checkout → venv setup → tests → Bandit/Gitleaks/pip-audit → build images → Trivy scan → push images → `kubectl apply` + `set image` in `lastmile` namespace. Green build indicates deploy succeeded.
+
+## D. Ansible provisioning (optional)
+Run infra + app provisioning from your control host:
+```bash
+ansible-playbook -i ansible/inventory.ini ansible/playbooks/site.yml --extra-vars "kube_join_command=<worker-join-cmd>"
+```
+Expected: Docker/Jenkins/K8s installed, cluster ready, app deployed to `lastmile`; `kubectl get pods -n lastmile` shows pods Running.
+## E. Observability (ELK)
+1) Deploy stack:
+   ```bash
+   kubectl apply -f k8s/elk/
+   ```
+2) Access Kibana:
+   ```bash
+   kubectl port-forward -n elk svc/kibana 5601:5601
+   ```
+   Open http://localhost:5601.
+3) Expected: Filebeat ships container logs; discover index `filebeat-*` in Kibana and see gateway/service logs.
+
+## F. Vault-based Secrets (optional)
+1) Ensure Vault injector is installed in cluster.
+2) Apply example:
+   ```bash
+   kubectl apply -f k8s/vault-agent-example.yaml
+   ```
+3) Expected: `gateway-secure` pod runs with injected env file; `kubectl logs deployment/gateway-secure` shows app starting without missing secret errors.
