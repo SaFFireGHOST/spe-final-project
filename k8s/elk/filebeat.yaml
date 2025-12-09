@@ -18,10 +18,11 @@ data:
                     logs_path: "/var/log/containers/"
           - add_cloud_metadata: {}
     output.elasticsearch:
-      hosts: ['http://elasticsearch:9200']
-      protocol: http
-      username: ''
-      password: ''
+      hosts: ['https://elasticsearch:9200']
+      protocol: https
+      username: 'elastic'
+      password: 'password123'
+      ssl.verification_mode: none
 ---
 apiVersion: v1
 kind: ServiceAccount
