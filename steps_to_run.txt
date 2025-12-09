@@ -82,21 +82,16 @@ Expected: Docker/Jenkins/K8s installed, cluster ready, app deployed to `default`
    ```bash
    kubectl apply -f k8s/elk/
    ```
-2) Configure Kibana:
-   - Generate Enrollment Token:
-     ```bash
-     kubectl exec -it $(kubectl get pods -l app=elasticsearch -o jsonpath="{.items[0].metadata.name}") -- bin/elasticsearch-create-enrollment-token -s kibana
-     ```
-   - Get Verification Code (if prompted):
-     ```bash
-     kubectl logs -l app=kibana
-     ```
-3) Access Kibana:
+2) Access Kibana:
    ```bash
    kubectl port-forward svc/kibana 5601:5601
    ```
    Open http://localhost:5601.
-4) Expected: Filebeat ships container logs; discover index `filebeat-*` in Kibana and see gateway/service logs.
+   - Login with:
+     - Username: `elastic`
+     - Password: `password123`
+
+3) Expected: Filebeat ships container logs; discover index `filebeat-*` in Kibana and see gateway/service logs.
 
 ## F. Vault-based Secrets (optional)
 1) Ensure Vault injector is installed in cluster.
