@@ -31,7 +31,10 @@ spec:
         - name: TRIP_ADDR
           value: "trip-svc:50055"
         - name: MONGO_URI
-          value: "mongodb://mongo:27017"
+          valueFrom:
+            secretKeyRef:
+              name: gateway-secrets
+              key: MONGO_URI
 ---
 apiVersion: v1
 kind: Service

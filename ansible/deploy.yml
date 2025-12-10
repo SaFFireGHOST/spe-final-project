@@ -3,6 +3,26 @@
   hosts: localhost
   connection: local
   tasks:
+    - name: Check if kubectl is installed
+      command: kubectl version --client
+      register: kubectl_check
+      ignore_errors: yes
+
+    - name: Fail if kubectl is not installed
+      fail:
+        msg: "kubectl is not installed or not in the PATH."
+      when: kubectl_check.rc != 0
+
+    - name: Check if Minikube is running
+      command: minikube status
+      register: minikube_check
+      ignore_errors: yes
+
+    - name: Fail if Minikube is not running
+      fail:
+        msg: "Minikube is not running. Please start it with 'minikube start'."
+      when: minikube_check.rc != 0
+
     - name: Create Namespace
       command: kubectl apply -f ../k8s/namespace.yaml
 
@@ -25,7 +45,7 @@
 
     - name: Update Service Images
       command: >
-        kubectl set image deployment/{{ item }} {{ item }}={{ registry }}/{{ item }}:{{ image_tag }} -n lastmile --record
+        kubectl set image deployment/{{ item }} {{ item }}={{ registry }}/{{ item }}:{{ image_tag }} -n lastmile
       loop:
         - user-svc
         - station-svc
@@ -38,17 +58,29 @@
       vars:
         registry: "{{ registry | default('docker.io/harsh2835') }}"
         image_tag: "{{ image_tag | default('latest') }}"
+      register: result
+      until: result.rc == 0
+      retries: 5
+      delay: 10
 
     - name: Update Gateway Image
       command: >
-        kubectl set image deployment/gateway gateway={{ registry }}/gateway-svc:{{ image_tag }} -n lastmile --record
+        kubectl set image deployment/gateway gateway={{ registry }}/gateway-svc:{{ image_tag }} -n lastmile
       vars:
         registry: "{{ registry | default('docker.io/harsh2835') }}"
         image_tag: "{{ image_tag | default('latest') }}"
+      register: result
+      until: result.rc == 0
+      retries: 5
+      delay: 10
 
     - name: Update Frontend Image
       command: >
-        kubectl set image deployment/frontend frontend={{ registry }}/lastmile-frontend:{{ image_tag }} -n lastmile --record
+        kubectl set image deployment/frontend frontend={{ registry }}/lastmile-frontend:{{ image_tag }} -n lastmile
       vars:
         registry: "{{ registry | default('docker.io/harsh2835') }}"
         image_tag: "{{ image_tag | default('latest') }}"
+      register: result
+      until: result.rc == 0
+      retries: 5
+      delay: 10
