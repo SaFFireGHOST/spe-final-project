@@ -213,22 +213,38 @@ pipeline {
 def getChangedServices() {
     def allServices = ['user-svc', 'station-svc', 'driver-svc', 'rider-svc', 'trip-svc', 'notification-svc', 'matching-svc', 'location-svc', 'gateway-svc', 'lastmile-frontend']
     
-    // If this is the first build or forced, build all
-    if (env.GIT_PREVIOUS_COMMIT == null || env.GIT_PREVIOUS_COMMIT == '') {
+    // Debugging: Print commit info
+    echo "Current Commit: ${env.GIT_COMMIT}"
+    echo "Previous Commit (Env): ${env.GIT_PREVIOUS_COMMIT}"
+
+    def previousCommit = env.GIT_PREVIOUS_COMMIT
+    
+    // Fallback: If env var is missing, try to get the previous commit from git history
+    if (previousCommit == null || previousCommit == '') {
+        try {
+            // Check if we have enough depth
+            previousCommit = sh(script: "git rev-parse HEAD^", returnStdout: true).trim()
+            echo "Previous Commit (Git fallback): ${previousCommit}"
+        } catch (Exception e) {
+            echo "Could not determine previous commit via git: ${e.message}"
+        }
+    }
+
+    // If still null, build all
+    if (previousCommit == null || previousCommit == '') {
         echo "No previous commit found. Building all services."
         return allServices
     }
 
     try {
-        def changedFiles = sh(script: "git diff --name-only ${env.GIT_PREVIOUS_COMMIT} ${env.GIT_COMMIT}", returnStdout: true).trim().split('\n')
+        def changedFiles = sh(script: "git diff --name-only ${previousCommit} ${env.GIT_COMMIT}", returnStdout: true).trim().split('\n')
+        echo "Changed files: ${changedFiles}"
+        
         def changedServices = [] as Set
 
         for (file in changedFiles) {
             if (file.startsWith('common/') || file == 'pyproject.toml') {
                 echo "Shared code changed (${file}). Building all backend services."
-                // Return all backend services + frontend (if we want to be safe, or just backend)
-                // Usually shared backend code doesn't affect frontend build unless it's shared types?
-                // Let's assume common is backend only for now.
                 return allServices
             }
             
