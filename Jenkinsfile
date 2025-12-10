@@ -84,7 +84,8 @@ pipeline {
             'notification-svc': 'Dockerfile.notification',
             'matching-svc': 'Dockerfile.matching',
             'location-svc': 'Dockerfile.location',
-            'gateway-svc': 'Dockerfile.gateway'
+            'gateway-svc': 'Dockerfile.gateway',
+            'init-db': 'Dockerfile.init'
           ]
           
           def builds = [:]
@@ -107,7 +108,7 @@ pipeline {
     stage('Container Scan (Trivy)') {
       steps {
         script {
-           def services = ['user-svc', 'station-svc', 'driver-svc', 'rider-svc', 'trip-svc', 'notification-svc', 'matching-svc', 'location-svc', 'gateway-svc']
+           def services = ['user-svc', 'station-svc', 'driver-svc', 'rider-svc', 'trip-svc', 'notification-svc', 'matching-svc', 'location-svc', 'gateway-svc', 'init-db']
            def scans = [:]
            
            services.each { svc ->
@@ -128,7 +129,7 @@ pipeline {
         script {
           sh "echo $DOCKERHUB_CREDS_PSW | docker login -u $DOCKERHUB_CREDS_USR --password-stdin"
           
-          def images = ['user-svc', 'station-svc', 'driver-svc', 'rider-svc', 'trip-svc', 'notification-svc', 'matching-svc', 'location-svc', 'gateway-svc', 'lastmile-frontend']
+          def images = ['user-svc', 'station-svc', 'driver-svc', 'rider-svc', 'trip-svc', 'notification-svc', 'matching-svc', 'location-svc', 'gateway-svc', 'init-db', 'lastmile-frontend']
           def pushes = [:]
           
           images.each { img ->
