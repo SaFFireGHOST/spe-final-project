@@ -75,70 +75,94 @@ pipeline {
     stage('Check Changes') {
       steps {
         script {
-          // Define service mappings: directory -> service name
-          def serviceMap = [
-            'services/user': 'user-svc',
-            'services/station': 'station-svc',
-            'services/driver': 'driver-svc',
-            'services/rider': 'rider-svc',
-            'services/trip': 'trip-svc',
-            'services/notification': 'notification-svc',
-            'services/matching': 'matching-svc',
-            'services/location': 'location-svc',
-            'gateway.py': 'gateway-svc',
-            'frontend': 'lastmile-frontend',
-            'scripts/init_db.py': 'init-db',
-            'Dockerfile.init': 'init-db'
-          ]
-
-          // Files that trigger a full rebuild
-          def coreFiles = ['common', 'Jenkinsfile', 'ansible']
-
-          // Get changed files
-          def changedFiles = sh(script: "git diff --name-only ${env.GIT_PREVIOUS_COMMIT} ${env.GIT_COMMIT}", returnStdout: true).trim().split('\n')
-          
-          def servicesToBuild = [] as Set
-          boolean buildAll = false
-
-          echo "Changed files: ${changedFiles}"
-
-          for (file in changedFiles) {
-            // Check for core file changes
-            if (coreFiles.any { file.startsWith(it) }) {
-              echo "Core file changed: ${file}. Triggering full build."
-              buildAll = true
-              break
-            }
-
-            // Check for service changes
-            serviceMap.each { path, svc ->
-              if (file.startsWith(path)) {
-                servicesToBuild.add(svc)
-              }
-            }
-          }
-
-          if (buildAll || servicesToBuild.isEmpty()) {
-            // If buildAll is true OR no specific service changes detected (maybe a new branch?), build everything to be safe
-            // Or if it's the first run
-            if (servicesToBuild.isEmpty() && !buildAll) {
-                 echo "No specific service changes detected, but defaulting to FULL build to be safe (or empty commit)."
-                 // You might want to set buildAll = true here, or handle empty commit case
-                 // But usually safe to build all if unsure.
-                 // Let's check if it's a merge commit or something.
-            }
-            
-            if (buildAll) {
-                servicesToBuild = serviceMap.values() as Set
-            }
-          }
-
-          // Save to environment variable for other stages
-          env.SERVICES_TO_BUILD = servicesToBuild.join(',')
+          def changedServices = getChangedServices()
+          env.SERVICES_TO_BUILD = changedServices.join(',')
           echo "Services to build: ${env.SERVICES_TO_BUILD}"
         }
       }
     }
+
+// Helper function to detect changed services
+def getChangedServices() {
+    def allServices = ['user-svc', 'station-svc', 'driver-svc', 'rider-svc', 'trip-svc', 'notification-svc', 'matching-svc', 'location-svc', 'gateway-svc', 'lastmile-frontend', 'init-db']
+    
+    // Debugging: Print commit info
+    echo "Current Commit: ${env.GIT_COMMIT}"
+    echo "Previous Commit (Env): ${env.GIT_PREVIOUS_COMMIT}"
+
+    def previousCommit = env.GIT_PREVIOUS_COMMIT
+    
+    // Fallback: If env var is missing, try to get the previous commit from git history
+    if (previousCommit == null || previousCommit == '') {
+        try {
+            // Check if we have enough depth
+            previousCommit = sh(script: "git rev-parse HEAD^", returnStdout: true).trim()
+            echo "Previous Commit (Git fallback): ${previousCommit}"
+        } catch (Exception e) {
+            echo "Could not determine previous commit via git: ${e.message}"
+        }
+    }
+
+    // If still null, build all
+    if (previousCommit == null || previousCommit == '') {
+        echo "No previous commit found. Building all services."
+        return allServices
+    }
+
+    def currentCommit = env.GIT_COMMIT
+    if (currentCommit == null || currentCommit == '') {
+        try {
+            currentCommit = sh(script: "git rev-parse HEAD", returnStdout: true).trim()
+            echo "Current Commit (Git fallback): ${currentCommit}"
+        } catch (Exception e) {
+            echo "Could not determine current commit: ${e.message}"
+            return allServices
+        }
+    }
+
+    try {
+        def changedFiles = sh(script: "git diff --name-only ${previousCommit} ${currentCommit}", returnStdout: true).trim().split('\n')
+        echo "Changed files: ${changedFiles}"
+        
+        def changedServices = [] as Set
+
+        for (file in changedFiles) {
+            if (file.startsWith('common/') || file == 'pyproject.toml' || file == 'Jenkinsfile' || file.startsWith('ansible/')) {
+                echo "Shared code changed (${file}). Building all backend services."
+                return allServices
+            }
+            
+            if (file.startsWith('frontend/')) {
+                changedServices.add('lastmile-frontend')
+            } else if (file.startsWith('services/user') || file == 'Dockerfile.user') {
+                changedServices.add('user-svc')
+            } else if (file.startsWith('services/station') || file == 'Dockerfile.station') {
+                changedServices.add('station-svc')
+            } else if (file.startsWith('services/driver') || file == 'Dockerfile.driver') {
+                changedServices.add('driver-svc')
+            } else if (file.startsWith('services/rider') || file == 'Dockerfile.rider') {
+                changedServices.add('rider-svc')
+            } else if (file.startsWith('services/trip') || file == 'Dockerfile.trip') {
+                changedServices.add('trip-svc')
+            } else if (file.startsWith('services/notification') || file == 'Dockerfile.notification') {
+                changedServices.add('notification-svc')
+            } else if (file.startsWith('services/matching') || file == 'Dockerfile.matching') {
+                changedServices.add('matching-svc')
+            } else if (file.startsWith('services/location') || file == 'Dockerfile.location') {
+                changedServices.add('location-svc')
+            } else if (file == 'gateway.py' || file == 'Dockerfile.gateway') {
+                changedServices.add('gateway-svc')
+            } else if (file == 'scripts/init_db.py' || file == 'Dockerfile.init') {
+                changedServices.add('init-db')
+            }
+        }
+        
+        return changedServices.toList()
+    } catch (Exception e) {
+        echo "Error detecting changes: ${e.message}. Fallback to building all."
+        return allServices
+    }
+}
 
     stage('Build Images') {
       when { expression { return env.SERVICES_TO_BUILD != '' } }
