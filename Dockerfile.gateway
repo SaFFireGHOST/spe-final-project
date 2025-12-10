@@ -19,6 +19,7 @@ COPY . .
 
 # Set python path to include current directory
 ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
 
 # Default command
 CMD ["python", "gateway.py"]
