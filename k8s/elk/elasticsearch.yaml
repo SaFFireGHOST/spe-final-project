@@ -43,6 +43,10 @@ spec:
           value: "false"
         - name: cluster.routing.allocation.disk.threshold_enabled
           value: "false"
+        - name: xpack.security.enabled
+          value: "false"
+        - name: xpack.security.http.ssl.enabled
+          value: "false"
         resources:
           requests:
             cpu: "250m"
