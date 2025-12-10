@@ -8,9 +8,17 @@
       register: kubectl_check
       ignore_errors: yes
 
-    - name: Fail if kubectl is not installed
-      fail:
-        msg: "kubectl is not installed or not in the PATH."
+    - name: Install kubectl if not installed
+      block:
+        - name: Download kubectl
+          get_url:
+            url: "https://dl.k8s.io/release/{{ lookup('url', 'https://dl.k8s.io/release/stable.txt') }}/bin/linux/amd64/kubectl"
+            dest: /tmp/kubectl
+            mode: '0755'
+        
+        - name: Move kubectl to /usr/local/bin
+          become: yes
+          command: mv /tmp/kubectl /usr/local/bin/kubectl
       when: kubectl_check.rc != 0
 
     - name: Check if Minikube is running
@@ -18,9 +26,8 @@
       register: minikube_check
       ignore_errors: yes
 
-    - name: Fail if Minikube is not running
-      fail:
-        msg: "Minikube is not running. Please start it with 'minikube start'."
+    - name: Start Minikube if not running
+      command: minikube start
       when: minikube_check.rc != 0
 
     - name: Create Namespace
