@@ -1,13 +1,9 @@
 ---
 - name: Create namespace for app
   shell: kubectl create namespace lastmile --dry-run=client -o yaml | kubectl apply -f -
-  environment:
-    KUBECONFIG: "{{ lookup('env', 'HOME') }}/.kube/config"
 
 - name: Apply Kubernetes manifests
   shell: kubectl apply -n lastmile -f ../../k8s/ --force-conflicts --server-side
-  environment:
-    KUBECONFIG: "{{ lookup('env', 'HOME') }}/.kube/config"
   register: apply_result
   failed_when: 
     - apply_result.rc != 0
@@ -22,12 +18,10 @@
     executable: /bin/bash
   environment:
     DOCKER_REGISTRY_JSON: "{{ docker_registry_secret | default('') }}"
-    KUBECONFIG: "{{ lookup('env', 'HOME') }}/.kube/config"
 
 - name: Wait for deployments
   shell: |
     kubectl rollout status deployment/user-svc -n lastmile --timeout=180s
     kubectl rollout status deployment/gateway -n lastmile --timeout=180s
     kubectl rollout status deployment/frontend -n lastmile --timeout=180s
-  environment:
-    KUBECONFIG: "{{ lookup('env', 'HOME') }}/.kube/config"
+
