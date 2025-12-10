@@ -142,12 +142,36 @@ pipeline {
       }
     }
 
-    // stage('Deploy to Kubernetes') {
-    //   steps {
-    //     // Pass manage_minikube=false so Ansible doesn't try to create a new cluster
-    //     sh ". .venv/bin/activate && ansible-playbook -i ansible/inventory ansible/deploy.yml --extra-vars \"image_tag=${IMAGE_TAG} registry=${REGISTRY} mongo_uri=mongodb://mongo:27017 manage_minikube=false\" --vault-password-file ansible/vault_pass.txt"
-    //   }
-    // }
+    stage('Deploy to Kubernetes') {
+      steps {
+        script {
+          // Apply manifests (idempotent - safe to run every time)
+          sh ". .venv/bin/activate && ansible-playbook -i ansible/inventory ansible/playbooks/site.yml"
+          
+          // Update all service images to the newly built version
+          def services = ['user-svc', 'station-svc', 'driver-svc', 'rider-svc', 'trip-svc', 'notification-svc', 'matching-svc', 'location-svc', 'gateway']
+          def updates = [:]
+          
+          services.each { svc ->
+            updates[svc] = {
+              // For gateway, the container name is 'gateway' but image is 'gateway-svc'
+              def imageName = (svc == 'gateway') ? 'gateway-svc' : svc
+              sh "kubectl set image deployment/${svc} ${svc}=${REGISTRY}/${imageName}:${IMAGE_TAG} -n lastmile"
+            }
+          }
+          
+          updates['frontend'] = {
+            sh "kubectl set image deployment/frontend frontend=${REGISTRY}/lastmile-frontend:${IMAGE_TAG} -n lastmile"
+          }
+          
+          parallel updates
+          
+          // Wait for critical services to be ready
+          sh "kubectl rollout status deployment/gateway -n lastmile --timeout=180s"
+          sh "kubectl rollout status deployment/frontend -n lastmile --timeout=180s"
+        }
+      }
+    }
   }
 
   post {
