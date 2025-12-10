@@ -142,47 +142,49 @@ pipeline {
       }
     }
 
-    // stage('Deploy to Kubernetes') {
-    //   steps {
-    //     // Pass manage_minikube=false so Ansible doesn't try to create a new cluster
-    //     sh ". .venv/bin/activate && ansible-playbook -i ansible/inventory ansible/deploy.yml --extra-vars \"image_tag=${IMAGE_TAG} registry=${REGISTRY} mongo_uri=mongodb://mongo:27017 manage_minikube=false\" --vault-password-file ansible/vault_pass.txt"
-    //   }
-    // }
     stage('Deploy to Kubernetes') {
       steps {
-        script {
-          echo "Using kubeconfig at: $KUBECONFIG"
-
-          sh '''
-            # Ensure kubectl can talk to the cluster
-            kubectl cluster-info
-
-            # Create namespace only if not exists
-            kubectl get namespace lastmile || kubectl create namespace lastmile
-
-            # Deploy all manifests with auto image tag injection
-            for file in k8s/*.yaml; do
-              echo "Applying $file"
-              kubectl apply -n lastmile -f $file
-            done
-
-            echo "Updating images to tag: '${IMAGE_TAG}'"
-            kubectl set image deployment/user-svc user-svc=$REGISTRY/user-svc:${IMAGE_TAG} -n lastmile || true
-            kubectl set image deployment/station-svc station-svc=$REGISTRY/station-svc:${IMAGE_TAG} -n lastmile || true
-            kubectl set image deployment/driver-svc driver-svc=$REGISTRY/driver-svc:${IMAGE_TAG} -n lastmile || true
-            kubectl set image deployment/rider-svc rider-svc=$REGISTRY/rider-svc:${IMAGE_TAG} -n lastmile || true
-            kubectl set image deployment/trip-svc trip-svc=$REGISTRY/trip-svc:${IMAGE_TAG} -n lastmile || true
-            kubectl set image deployment/notification-svc notification-svc=$REGISTRY/notification-svc:${IMAGE_TAG} -n lastmile || true
-            kubectl set image deployment/matching-svc matching-svc=$REGISTRY/matching-svc:${IMAGE_TAG} -n lastmile || true
-            kubectl set image deployment/location-svc location-svc=$REGISTRY/location-svc:${IMAGE_TAG} -n lastmile || true
-            kubectl set image deployment/gateway-svc gateway-svc=$REGISTRY/gateway-svc:${IMAGE_TAG} -n lastmile || true
-            kubectl set image deployment/lastmile-frontend lastmile-frontend=$REGISTRY/lastmile-frontend:${IMAGE_TAG} -n lastmile || true
-
-            echo "Deployment complete!"
-          '''
-        }
+        // Pass manage_minikube=false so Ansible doesn't try to create a new cluster
+        sh ". .venv/bin/activate && ansible-playbook -i ansible/inventory ansible/deploy.yml --extra-vars \"image_tag=${IMAGE_TAG} registry=${REGISTRY} mongo_uri=mongodb://mongo:27017 manage_minikube=false\" --vault-password-file ansible/vault_pass.txt"
       }
     }
+    
+
+    // stage('Deploy to Kubernetes') {
+    //   steps {
+    //     script {
+    //       echo "Using kubeconfig at: $KUBECONFIG"
+
+    //       sh '''
+    //         # Ensure kubectl can talk to the cluster
+    //         kubectl cluster-info
+
+    //         # Create namespace only if not exists
+    //         kubectl get namespace lastmile || kubectl create namespace lastmile
+
+    //         # Deploy all manifests with auto image tag injection
+    //         for file in k8s/*.yaml; do
+    //           echo "Applying $file"
+    //           kubectl apply -n lastmile -f $file
+    //         done
+
+    //         echo "Updating images to tag: '${IMAGE_TAG}'"
+    //         kubectl set image deployment/user-svc user-svc=$REGISTRY/user-svc:${IMAGE_TAG} -n lastmile || true
+    //         kubectl set image deployment/station-svc station-svc=$REGISTRY/station-svc:${IMAGE_TAG} -n lastmile || true
+    //         kubectl set image deployment/driver-svc driver-svc=$REGISTRY/driver-svc:${IMAGE_TAG} -n lastmile || true
+    //         kubectl set image deployment/rider-svc rider-svc=$REGISTRY/rider-svc:${IMAGE_TAG} -n lastmile || true
+    //         kubectl set image deployment/trip-svc trip-svc=$REGISTRY/trip-svc:${IMAGE_TAG} -n lastmile || true
+    //         kubectl set image deployment/notification-svc notification-svc=$REGISTRY/notification-svc:${IMAGE_TAG} -n lastmile || true
+    //         kubectl set image deployment/matching-svc matching-svc=$REGISTRY/matching-svc:${IMAGE_TAG} -n lastmile || true
+    //         kubectl set image deployment/location-svc location-svc=$REGISTRY/location-svc:${IMAGE_TAG} -n lastmile || true
+    //         kubectl set image deployment/gateway-svc gateway-svc=$REGISTRY/gateway-svc:${IMAGE_TAG} -n lastmile || true
+    //         kubectl set image deployment/lastmile-frontend lastmile-frontend=$REGISTRY/lastmile-frontend:${IMAGE_TAG} -n lastmile || true
+
+    //         echo "Deployment complete!"
+    //       '''
+    //     }
+    //   }
+    // }
 
 
 

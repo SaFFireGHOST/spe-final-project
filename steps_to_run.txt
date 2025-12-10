@@ -74,7 +74,9 @@
 ## E. Ansible provisioning (optional)
 Run infra + app provisioning from your control host:
 ```bash
-ansible-playbook -i ansible/inventory ansible/deploy.yml --vault-password-file ansible/vault_pass.txt
+ansible-playbook -i ansible/inventory ansible/deploy.yml \
+  --extra-vars "registry=docker.io/saffireghost image_tag=latest" \
+  --vault-password-file ansible/vault_pass.txt
 ```
 Expected: Docker/Jenkins/K8s installed, cluster ready, app deployed to `default`; `kubectl get pods` shows pods Running.
 ## F. Observability (ELK)
