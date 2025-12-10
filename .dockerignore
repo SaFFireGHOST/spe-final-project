@@ -1,0 +1,13 @@
+.git
+.gitignore
+.venv
+ansible
+k8s
+Jenkinsfile
+README.md
+*.pdf
+**/node_modules
+frontend/
+__pycache__
+*.pyc
+.DS_Store
