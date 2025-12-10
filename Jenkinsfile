@@ -145,73 +145,43 @@ pipeline {
     stage('Deploy to Kubernetes') {
       steps {
         script {
-          // Jenkins is running inside the cluster - configure kubectl to use service account
-          sh '''
-            # Debug: Check if service account files exist
-            echo "=== Checking for service account files ==="
-            ls -la /var/run/secrets/kubernetes.io/serviceaccount/ || echo "Service account directory not found!"
-            
-            if [ ! -f /var/run/secrets/kubernetes.io/serviceaccount/token ]; then
-              echo "ERROR: Service account token not found!"
-              exit 1
-            fi
-            
-            mkdir -p ~/.kube
-            cat > ~/.kube/config << EOF
-apiVersion: v1
-kind: Config
-clusters:
-- cluster:
-    certificate-authority: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
-    server: https://kubernetes.default.svc.cluster.local
-  name: kubernetes
-contexts:
-- context:
-    cluster: kubernetes
-    namespace: lastmile
-    user: serviceaccount
-  name: serviceaccount
-current-context: serviceaccount
-users:
-- name: serviceaccount
-  user:
-    tokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
-EOF
-            
-            # Debug: verify the config was created and check what kubectl sees
-            echo "=== Kubeconfig created at ~/.kube/config ==="
-            cat ~/.kube/config
-            echo "=== Testing kubectl with explicit config ==="
-            export KUBECONFIG=~/.kube/config
-            kubectl cluster-info
-          '''
+          // Jenkins builds run outside the cluster, so we use kubectl directly
+          // kubectl should already be configured on the Jenkins agent
           
-          // Set KUBECONFIG for all subsequent commands
-          withEnv(["KUBECONFIG=${env.HOME}/.kube/config"]) {
-            sh ". .venv/bin/activate && ansible-playbook -i ansible/inventory ansible/playbooks/site.yml"
-            
-            // Update all service images to the newly built version
-            def services = ['user-svc', 'station-svc', 'driver-svc', 'rider-svc', 'trip-svc', 'notification-svc', 'matching-svc', 'location-svc', 'gateway']
-            def updates = [:]
-            
-            services.each { svc ->
-              updates[svc] = {
-                // For gateway, the container name is 'gateway' but image is 'gateway-svc'
-                def imageName = (svc == 'gateway') ? 'gateway-svc' : svc
-                sh "kubectl set image deployment/${svc} ${svc}=${REGISTRY}/${imageName}:${IMAGE_TAG} -n lastmile"
-              }
+          // Create namespace if it doesn't exist
+          sh "kubectl create namespace lastmile --dry-run=client -o yaml | kubectl apply -f -"
+          
+          // Apply all Kubernetes manifests
+          sh "kubectl apply -n lastmile -f k8s/ || true"
+          
+          // Create gateway secrets if they don't exist
+          sh """
+            kubectl create secret generic gateway-secrets \
+              --from-literal=MONGO_URI='mongodb://mongo:27017/lastmile' \
+              -n lastmile --dry-run=client -o yaml | kubectl apply -f -
+          """
+          
+          // Update all service images to the newly built version
+          def services = ['user-svc', 'station-svc', 'driver-svc', 'rider-svc', 'trip-svc', 'notification-svc', 'matching-svc', 'location-svc', 'gateway']
+          def updates = [:]
+          
+          services.each { svc ->
+            updates[svc] = {
+              // For gateway, the container name is 'gateway' but image is 'gateway-svc'
+              def imageName = (svc == 'gateway') ? 'gateway-svc' : svc
+              sh "kubectl set image deployment/${svc} ${svc}=${REGISTRY}/${imageName}:${IMAGE_TAG} -n lastmile"
             }
-            
-            updates['frontend'] = {
-              sh "kubectl set image deployment/frontend frontend=${REGISTRY}/lastmile-frontend:${IMAGE_TAG} -n lastmile"
-            }
-            
-            parallel updates
-            
-            // Wait for critical services to be ready
-            sh "kubectl rollout status deployment/gateway -n lastmile --timeout=180s"
-            sh "kubectl rollout status deployment/frontend -n lastmile --timeout=180s"
           }
+          
+          updates['frontend'] = {
+            sh "kubectl set image deployment/frontend frontend=${REGISTRY}/lastmile-frontend:${IMAGE_TAG} -n lastmile"
+          }
+          
+          parallel updates
+          
+          // Wait for critical services to be ready
+          sh "kubectl rollout status deployment/gateway -n lastmile --timeout=180s"
+          sh "kubectl rollout status deployment/frontend -n lastmile --timeout=180s"
         }
       }
     }
