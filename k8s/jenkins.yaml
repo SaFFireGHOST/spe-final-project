@@ -30,6 +30,7 @@ spec:
         app: jenkins
     spec:
       serviceAccountName: jenkins
+      automountServiceAccountToken: true
       containers:
       - name: jenkins
         image: jenkins/jenkins:lts-jdk17
