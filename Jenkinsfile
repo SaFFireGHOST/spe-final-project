@@ -72,7 +72,76 @@ pipeline {
       }
     }
 
+    stage('Check Changes') {
+      steps {
+        script {
+          // Define service mappings: directory -> service name
+          def serviceMap = [
+            'services/user': 'user-svc',
+            'services/station': 'station-svc',
+            'services/driver': 'driver-svc',
+            'services/rider': 'rider-svc',
+            'services/trip': 'trip-svc',
+            'services/notification': 'notification-svc',
+            'services/matching': 'matching-svc',
+            'services/location': 'location-svc',
+            'gateway.py': 'gateway-svc',
+            'frontend': 'lastmile-frontend',
+            'scripts/init_db.py': 'init-db',
+            'Dockerfile.init': 'init-db'
+          ]
+
+          // Files that trigger a full rebuild
+          def coreFiles = ['common', 'Jenkinsfile', 'ansible']
+
+          // Get changed files
+          def changedFiles = sh(script: "git diff --name-only ${env.GIT_PREVIOUS_COMMIT} ${env.GIT_COMMIT}", returnStdout: true).trim().split('\n')
+          
+          def servicesToBuild = [] as Set
+          boolean buildAll = false
+
+          echo "Changed files: ${changedFiles}"
+
+          for (file in changedFiles) {
+            // Check for core file changes
+            if (coreFiles.any { file.startsWith(it) }) {
+              echo "Core file changed: ${file}. Triggering full build."
+              buildAll = true
+              break
+            }
+
+            // Check for service changes
+            serviceMap.each { path, svc ->
+              if (file.startsWith(path)) {
+                servicesToBuild.add(svc)
+              }
+            }
+          }
+
+          if (buildAll || servicesToBuild.isEmpty()) {
+            // If buildAll is true OR no specific service changes detected (maybe a new branch?), build everything to be safe
+            // Or if it's the first run
+            if (servicesToBuild.isEmpty() && !buildAll) {
+                 echo "No specific service changes detected, but defaulting to FULL build to be safe (or empty commit)."
+                 // You might want to set buildAll = true here, or handle empty commit case
+                 // But usually safe to build all if unsure.
+                 // Let's check if it's a merge commit or something.
+            }
+            
+            if (buildAll) {
+                servicesToBuild = serviceMap.values() as Set
+            }
+          }
+
+          // Save to environment variable for other stages
+          env.SERVICES_TO_BUILD = servicesToBuild.join(',')
+          echo "Services to build: ${env.SERVICES_TO_BUILD}"
+        }
+      }
+    }
+
     stage('Build Images') {
+      when { expression { return env.SERVICES_TO_BUILD != '' } }
       steps {
         script {
           def svcFiles = [
@@ -89,103 +158,116 @@ pipeline {
           ]
           
           def builds = [:]
+          def targets = env.SERVICES_TO_BUILD.split(',')
           
           svcFiles.each { name, dockerfile ->
-            builds[name] = {
-              sh "docker build -f ${dockerfile} -t ${REGISTRY}/${name}:${IMAGE_TAG} -t ${REGISTRY}/${name}:latest ."
+            if (targets.contains(name)) {
+                builds[name] = {
+                  sh "docker build -f ${dockerfile} -t ${REGISTRY}/${name}:${IMAGE_TAG} -t ${REGISTRY}/${name}:latest ."
+                }
             }
           }
           
-          builds['lastmile-frontend'] = {
-            sh "docker build -t ${REGISTRY}/lastmile-frontend:${IMAGE_TAG} -t ${REGISTRY}/lastmile-frontend:latest -f frontend/Dockerfile frontend"
+          if (targets.contains('lastmile-frontend')) {
+              builds['lastmile-frontend'] = {
+                sh "docker build -t ${REGISTRY}/lastmile-frontend:${IMAGE_TAG} -t ${REGISTRY}/lastmile-frontend:latest -f frontend/Dockerfile frontend"
+              }
           }
           
-          parallel builds
+          if (builds.size() > 0) {
+            parallel builds
+          } else {
+            echo "No services to build."
+          }
         }
       }
     }
 
     stage('Container Scan (Trivy)') {
+      when { expression { return env.SERVICES_TO_BUILD != '' } }
       steps {
         script {
-           def services = ['user-svc', 'station-svc', 'driver-svc', 'rider-svc', 'trip-svc', 'notification-svc', 'matching-svc', 'location-svc', 'gateway-svc', 'init-db']
+           def targets = env.SERVICES_TO_BUILD.split(',')
            def scans = [:]
            
-           services.each { svc ->
+           targets.each { svc ->
              scans[svc] = {
                echo "Scanning ${svc}..."
-               // Added --user 0, :z, and --privileged to fix permission issues
                sh "docker run --privileged --rm -u 0 -v /var/run/docker.sock:/var/run/docker.sock:z aquasec/trivy:latest image --severity HIGH,CRITICAL ${REGISTRY}/${svc}:${IMAGE_TAG} || true"
              }
            }
            
-           parallel scans
+           if (scans.size() > 0) {
+             parallel scans
+           }
         }
       }
     }
 
     stage('Push Images') {
+      when { expression { return env.SERVICES_TO_BUILD != '' } }
       steps {
         script {
           sh "echo $DOCKERHUB_CREDS_PSW | docker login -u $DOCKERHUB_CREDS_USR --password-stdin"
           
-          def images = ['user-svc', 'station-svc', 'driver-svc', 'rider-svc', 'trip-svc', 'notification-svc', 'matching-svc', 'location-svc', 'gateway-svc', 'init-db', 'lastmile-frontend']
+          def targets = env.SERVICES_TO_BUILD.split(',')
           def pushes = [:]
           
-          images.each { img ->
+          targets.each { img ->
             pushes[img] = {
               sh "docker push ${REGISTRY}/${img}:${IMAGE_TAG} && docker push ${REGISTRY}/${img}:latest"
             }
           }
           
-          parallel pushes
+          if (pushes.size() > 0) {
+            parallel pushes
+          }
         }
       }
     }
 
     stage('Deploy to Kubernetes') {
       steps {
-        // Pass manage_minikube=false so Ansible doesn't try to create a new cluster
-        sh ". .venv/bin/activate && ansible-playbook -i ansible/inventory ansible/deploy.yml --extra-vars \"image_tag=${IMAGE_TAG} registry=${REGISTRY} mongo_uri=mongodb://mongo:27017 manage_minikube=false\" --vault-password-file ansible/vault_pass.txt"
+        script {
+          echo "Using kubeconfig at: $KUBECONFIG"
+
+          sh '''
+            # Ensure kubectl can talk to the cluster
+            kubectl cluster-info
+
+            # Create namespace only if not exists
+            kubectl get namespace lastmile || kubectl create namespace lastmile
+
+            # Deploy all manifests (fast, declarative)
+            for file in k8s/*.yaml; do
+              echo "Applying $file"
+              kubectl apply -n lastmile -f $file
+            done
+          '''
+          
+          // Only update images for services that were rebuilt
+          def targets = env.SERVICES_TO_BUILD.split(',')
+          
+          if (targets.length > 0) {
+              echo "Updating images for: ${env.SERVICES_TO_BUILD}"
+              targets.each { svc ->
+                  // Handle special case for frontend deployment name if needed, but here it matches
+                  // Also handle init-db job separately if needed, but jobs are immutable so usually we delete/recreate or just let the new image be used next run
+                  if (svc == 'init-db') {
+                      // For jobs, we might want to delete the old one to trigger a new run, or just leave it
+                      sh "kubectl delete job init-db-job -n lastmile --ignore-not-found=true"
+                      sh "kubectl apply -f k8s/init-db-job.yaml -n lastmile"
+                  } else {
+                      sh "kubectl set image deployment/${svc} ${svc}=${REGISTRY}/${svc}:${IMAGE_TAG} -n lastmile || true"
+                  }
+              }
+              echo "Deployment updates complete!"
+          } else {
+              echo "No services rebuilt, skipping image updates."
+          }
+        }
       }
     }
-    
-
-    // stage('Deploy to Kubernetes') {
-    //   steps {
-    //     script {
-    //       echo "Using kubeconfig at: $KUBECONFIG"
-
-    //       sh '''
-    //         # Ensure kubectl can talk to the cluster
-    //         kubectl cluster-info
-
-    //         # Create namespace only if not exists
-    //         kubectl get namespace lastmile || kubectl create namespace lastmile
-
-    //         # Deploy all manifests with auto image tag injection
-    //         for file in k8s/*.yaml; do
-    //           echo "Applying $file"
-    //           kubectl apply -n lastmile -f $file
-    //         done
-
-    //         echo "Updating images to tag: '${IMAGE_TAG}'"
-    //         kubectl set image deployment/user-svc user-svc=$REGISTRY/user-svc:${IMAGE_TAG} -n lastmile || true
-    //         kubectl set image deployment/station-svc station-svc=$REGISTRY/station-svc:${IMAGE_TAG} -n lastmile || true
-    //         kubectl set image deployment/driver-svc driver-svc=$REGISTRY/driver-svc:${IMAGE_TAG} -n lastmile || true
-    //         kubectl set image deployment/rider-svc rider-svc=$REGISTRY/rider-svc:${IMAGE_TAG} -n lastmile || true
-    //         kubectl set image deployment/trip-svc trip-svc=$REGISTRY/trip-svc:${IMAGE_TAG} -n lastmile || true
-    //         kubectl set image deployment/notification-svc notification-svc=$REGISTRY/notification-svc:${IMAGE_TAG} -n lastmile || true
-    //         kubectl set image deployment/matching-svc matching-svc=$REGISTRY/matching-svc:${IMAGE_TAG} -n lastmile || true
-    //         kubectl set image deployment/location-svc location-svc=$REGISTRY/location-svc:${IMAGE_TAG} -n lastmile || true
-    //         kubectl set image deployment/gateway-svc gateway-svc=$REGISTRY/gateway-svc:${IMAGE_TAG} -n lastmile || true
-    //         kubectl set image deployment/lastmile-frontend lastmile-frontend=$REGISTRY/lastmile-frontend:${IMAGE_TAG} -n lastmile || true
-
-    //         echo "Deployment complete!"
-    //       '''
-    //     }
-    //   }
-    // }
 
 
 
