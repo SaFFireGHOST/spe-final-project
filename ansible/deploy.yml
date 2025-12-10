@@ -25,14 +25,15 @@
       command: minikube status
       register: minikube_check
       ignore_errors: yes
+      when: manage_minikube | default(true)
 
     - name: Delete Minikube if not running or misconfigured
       command: minikube delete
-      when: minikube_check.rc != 0
+      when: (manage_minikube | default(true)) and (minikube_check.rc != 0)
 
     - name: Start Minikube
       command: minikube start
-      when: minikube_check.rc != 0
+      when: (manage_minikube | default(true)) and (minikube_check.rc != 0)
 
     - name: Create Namespace
       command: kubectl apply -f ../k8s/namespace.yaml
