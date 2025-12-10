@@ -145,8 +145,31 @@ pipeline {
     stage('Deploy to Kubernetes') {
       steps {
         script {
-          // Jenkins is running inside the cluster, so it can use its service account directly
-          // No kubeconfig credential needed
+          // Jenkins is running inside the cluster - configure kubectl to use service account
+          sh '''
+            mkdir -p ~/.kube
+            cat > ~/.kube/config << EOF
+apiVersion: v1
+kind: Config
+clusters:
+- cluster:
+    certificate-authority: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+    server: https://kubernetes.default.svc.cluster.local
+  name: kubernetes
+contexts:
+- context:
+    cluster: kubernetes
+    namespace: lastmile
+    user: serviceaccount
+  name: serviceaccount
+current-context: serviceaccount
+users:
+- name: serviceaccount
+  user:
+    tokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+EOF
+          '''
+          
           sh ". .venv/bin/activate && ansible-playbook -i ansible/inventory ansible/playbooks/site.yml"
           
           // Update all service images to the newly built version
