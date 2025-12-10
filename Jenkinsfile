@@ -55,11 +55,11 @@ pipeline {
     stage('Frontend Tests') {
       steps {
         dir('frontend') {
-          sh "npm install"
-          sh "npm test -- --run"
+          sh "docker run --rm -v $(pwd):/app -w /app node:22-alpine sh -c 'npm ci && npm test -- --run'"
         }
       }
     }
+
 
     stage('SAST & Secret Scan') {
       steps {

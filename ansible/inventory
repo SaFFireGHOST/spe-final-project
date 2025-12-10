@@ -1,2 +1,8 @@
 [local]
 localhost ansible_connection=local
+
+[controllers]
+localhost ansible_connection=local
+
+[workers]
+localhost ansible_connection=local
