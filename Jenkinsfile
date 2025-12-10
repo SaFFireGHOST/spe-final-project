@@ -54,9 +54,12 @@ pipeline {
 
     stage('Frontend Tests') {
       steps {
-        sh "docker build -t temp-frontend-test -f frontend/Dockerfile ."
+        dir('frontend') {
+          sh "docker build -t temp-frontend-test -f Dockerfile ."
+        }
       }
     }
+
 
 
 
