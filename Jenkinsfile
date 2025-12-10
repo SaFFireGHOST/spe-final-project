@@ -101,8 +101,8 @@ pipeline {
            
            services.each { svc ->
              echo "Scanning ${svc}..."
-             // Added --user 0 and :z to fix permission issues
-             sh "docker run --rm -u 0 -v /var/run/docker.sock:/var/run/docker.sock:z aquasec/trivy:latest image --severity HIGH,CRITICAL ${REGISTRY}/${svc}:${IMAGE_TAG} || true"
+             // Added --user 0, :z, and --privileged to fix permission issues
+             sh "docker run --privileged --rm -u 0 -v /var/run/docker.sock:/var/run/docker.sock:z aquasec/trivy:latest image --severity HIGH,CRITICAL ${REGISTRY}/${svc}:${IMAGE_TAG} || true"
            }
         }
       }
