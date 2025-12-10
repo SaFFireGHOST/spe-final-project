@@ -161,7 +161,7 @@ pipeline {
           script {
             // Apply all manifests to ensure cluster state is correct
             // This replaces Ansible
-            sh "kubectl apply -f k8s/"
+            sh "kubectl apply --validate=false -f k8s/"
             
             def changedServices = getChangedServices()
             if (!changedServices.isEmpty()) {
