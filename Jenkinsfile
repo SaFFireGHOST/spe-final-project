@@ -147,6 +147,15 @@ pipeline {
         script {
           // Jenkins is running inside the cluster - configure kubectl to use service account
           sh '''
+            # Debug: Check if service account files exist
+            echo "=== Checking for service account files ==="
+            ls -la /var/run/secrets/kubernetes.io/serviceaccount/ || echo "Service account directory not found!"
+            
+            if [ ! -f /var/run/secrets/kubernetes.io/serviceaccount/token ]; then
+              echo "ERROR: Service account token not found!"
+              exit 1
+            fi
+            
             mkdir -p ~/.kube
             cat > ~/.kube/config << EOF
 apiVersion: v1
