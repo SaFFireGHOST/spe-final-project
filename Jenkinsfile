@@ -161,7 +161,7 @@ pipeline {
             kubectl get namespace lastmile || kubectl create namespace lastmile
 
             # Deploy all manifests with auto image tag injection
-            for file in ansible/k8s/*.yaml; do
+            for file in k8s/*.yaml; do
               echo "Applying $file"
               kubectl apply -n lastmile -f $file
             done
