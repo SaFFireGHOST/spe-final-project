@@ -101,35 +101,35 @@ pipeline {
            
            services.each { svc ->
              echo "Scanning ${svc}..."
-             // Added --user 0 to fix permission issue, even in sequential mode
-             sh "docker run --rm -u 0 -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image --severity HIGH,CRITICAL ${REGISTRY}/${svc}:${IMAGE_TAG} || true"
+             // Added --user 0 and :z to fix permission issues
+             sh "docker run --rm -u 0 -v /var/run/docker.sock:/var/run/docker.sock:z aquasec/trivy:latest image --severity HIGH,CRITICAL ${REGISTRY}/${svc}:${IMAGE_TAG} || true"
            }
         }
       }
     }
 
-    stage('Push Images') {
-      steps {
-          sh "echo $DOCKERHUB_CREDS_PSW | docker login -u $DOCKERHUB_CREDS_USR --password-stdin"
-          sh "docker push ${REGISTRY}/user-svc:${IMAGE_TAG} && docker push ${REGISTRY}/user-svc:latest"
-          sh "docker push ${REGISTRY}/station-svc:${IMAGE_TAG} && docker push ${REGISTRY}/station-svc:latest"
-          sh "docker push ${REGISTRY}/driver-svc:${IMAGE_TAG} && docker push ${REGISTRY}/driver-svc:latest"
-          sh "docker push ${REGISTRY}/rider-svc:${IMAGE_TAG} && docker push ${REGISTRY}/rider-svc:latest"
-          sh "docker push ${REGISTRY}/trip-svc:${IMAGE_TAG} && docker push ${REGISTRY}/trip-svc:latest"
-          sh "docker push ${REGISTRY}/notification-svc:${IMAGE_TAG} && docker push ${REGISTRY}/notification-svc:latest"
-          sh "docker push ${REGISTRY}/matching-svc:${IMAGE_TAG} && docker push ${REGISTRY}/matching-svc:latest"
-          sh "docker push ${REGISTRY}/location-svc:${IMAGE_TAG} && docker push ${REGISTRY}/location-svc:latest"
-          sh "docker push ${REGISTRY}/gateway-svc:${IMAGE_TAG} && docker push ${REGISTRY}/gateway-svc:latest"
-          sh "docker push ${REGISTRY}/lastmile-frontend:${IMAGE_TAG} && docker push ${REGISTRY}/lastmile-frontend:latest"
-      }
-    }
+    // stage('Push Images') {
+    //   steps {
+    //       sh "echo $DOCKERHUB_CREDS_PSW | docker login -u $DOCKERHUB_CREDS_USR --password-stdin"
+    //       sh "docker push ${REGISTRY}/user-svc:${IMAGE_TAG} && docker push ${REGISTRY}/user-svc:latest"
+    //       sh "docker push ${REGISTRY}/station-svc:${IMAGE_TAG} && docker push ${REGISTRY}/station-svc:latest"
+    //       sh "docker push ${REGISTRY}/driver-svc:${IMAGE_TAG} && docker push ${REGISTRY}/driver-svc:latest"
+    //       sh "docker push ${REGISTRY}/rider-svc:${IMAGE_TAG} && docker push ${REGISTRY}/rider-svc:latest"
+    //       sh "docker push ${REGISTRY}/trip-svc:${IMAGE_TAG} && docker push ${REGISTRY}/trip-svc:latest"
+    //       sh "docker push ${REGISTRY}/notification-svc:${IMAGE_TAG} && docker push ${REGISTRY}/notification-svc:latest"
+    //       sh "docker push ${REGISTRY}/matching-svc:${IMAGE_TAG} && docker push ${REGISTRY}/matching-svc:latest"
+    //       sh "docker push ${REGISTRY}/location-svc:${IMAGE_TAG} && docker push ${REGISTRY}/location-svc:latest"
+    //       sh "docker push ${REGISTRY}/gateway-svc:${IMAGE_TAG} && docker push ${REGISTRY}/gateway-svc:latest"
+    //       sh "docker push ${REGISTRY}/lastmile-frontend:${IMAGE_TAG} && docker push ${REGISTRY}/lastmile-frontend:latest"
+    //   }
+    // }
 
-    stage('Deploy to Kubernetes') {
-      steps {
-        // Pass manage_minikube=false so Ansible doesn't try to create a new cluster
-        sh ". .venv/bin/activate && ansible-playbook -i ansible/inventory ansible/deploy.yml --extra-vars \"image_tag=${IMAGE_TAG} registry=${REGISTRY} mongo_uri=mongodb://mongo:27017 manage_minikube=false\" --vault-password-file ansible/vault_pass.txt"
-      }
-    }
+    // stage('Deploy to Kubernetes') {
+    //   steps {
+    //     // Pass manage_minikube=false so Ansible doesn't try to create a new cluster
+    //     sh ". .venv/bin/activate && ansible-playbook -i ansible/inventory ansible/deploy.yml --extra-vars \"image_tag=${IMAGE_TAG} registry=${REGISTRY} mongo_uri=mongodb://mongo:27017 manage_minikube=false\" --vault-password-file ansible/vault_pass.txt"
+    //   }
+    // }
   }
 
   post {
