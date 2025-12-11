@@ -1,0 +1,3 @@
+---
+- name: Delete existing init-db job (Jobs are immutable, must delete before reapplying)
+  command: kubectl delete job init-db-job -n lastmile --ignore-not-found=true

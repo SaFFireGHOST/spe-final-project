@@ -11,6 +11,8 @@
     
     - role: playbooks/roles/k8s-secrets
     
+    - role: playbooks/roles/k8s-pre-deploy
+    
     - role: playbooks/roles/app-deploy
     
     - role: playbooks/roles/elk-deploy

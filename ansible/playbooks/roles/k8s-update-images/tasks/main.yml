@@ -1,4 +1,7 @@
 ---
+- name: Delete existing init-db job (Jobs are immutable)
+  command: kubectl delete job init-db-job -n lastmile --ignore-not-found=true
+
 - name: Update Service Images
   command: >
     kubectl set image deployment/{{ item }} {{ item }}={{ registry | default('docker.io/youruser') }}/{{ item }}:{{ image_tag | default('latest') }} -n lastmile
