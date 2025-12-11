@@ -70,6 +70,97 @@ pipeline {
       steps {
         sh ". .venv/bin/activate && pip install bandit pip-audit"
         sh ". .venv/bin/activate && bandit -r services common gateway.py -c bandit.yml"
+        sh "gitleaks detect -c .gitleaks.toml --no-banner || true"
+        sh ". .venv/bin/activate && pip-audit || true"
+      }
+    }
+
+    stage('Check Changes') {
+      steps {
+        script {
+          def changedServices = getChangedServices()
+          env.SERVICES_TO_BUILD = changedServices.join(',')
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🔍 SERVICES TO BUILD:"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          if (changedServices.size() > 0) {
+            changedServices.each { svc ->
+              echo "  ✓ ${svc}"
+            }
+          } else {
+            echo "  ⚠ No services to build (no changes detected)"
+          }
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Services list: ${env.SERVICES_TO_BUILD}"
+        }
+      }
+    }
+
+    stage('Build Images') {
+      when { expression { return env.SERVICES_TO_BUILD != '' } }
+      steps {
+        script {
+          def svcFiles = [
+            'user-svc': 'Dockerfile.user',
+            'station-svc': 'Dockerfile.station',
+            'driver-svc': 'Dockerfile.driver',
+            'rider-svc': 'Dockerfile.rider',
+            'trip-svc': 'Dockerfile.trip',
+            'notification-svc': 'Dockerfile.notification',
+            'matching-svc': 'Dockerfile.matching',
+            'location-svc': 'Dockerfile.location',
+            'gateway-svc': 'Dockerfile.gateway',
+            'init-db': 'Dockerfile.init'
+          ]
+          
+          def builds = [:]
+          def targets = env.SERVICES_TO_BUILD.split(',')
+          
+          svcFiles.each { name, dockerfile ->
+            if (targets.contains(name)) {
+                builds[name] = {
+                  sh "docker build -f ${dockerfile} -t ${REGISTRY}/${name}:${IMAGE_TAG} -t ${REGISTRY}/${name}:latest ."
+                }
+            }
+          }
+          
+          if (targets.contains('lastmile-frontend')) {
+              builds['lastmile-frontend'] = {
+                sh "docker build -t ${REGISTRY}/lastmile-frontend:${IMAGE_TAG} -t ${REGISTRY}/lastmile-frontend:latest -f frontend/Dockerfile frontend"
+              }
+          }
+          
+          if (builds.size() > 0) {
+            parallel builds
+          } else {
+            echo "No services to build."
+          }
+        }
+      }
+    }
+
+    stage('Container Scan (Trivy)') {
+      when { expression { return env.SERVICES_TO_BUILD != '' } }
+      steps {
+        script {
+           def targets = env.SERVICES_TO_BUILD.split(',')
+           def scans = [:]
+           
+           targets.each { svc ->
+             scans[svc] = {
+                echo "Scanning ${svc}..."
+                sh "docker run --privileged --rm -u 0 -v /var/run/docker.sock:/var/run/docker.sock:z aquasec/trivy:latest image --timeout 15m --scanners vuln --severity HIGH,CRITICAL ${REGISTRY}/${svc}:${IMAGE_TAG} || true"
+              }
+           }
+                      if (scans.size() > 0) {
+             parallel scans
+            }
+        }
+      }
+    }
+
+    stage('Push Images') {
+      when { expression { return env.SERVICES_TO_BUILD != '' } }
       steps {
         script {
           sh 'echo $DOCKERHUB_CREDS_PSW | docker login -u $DOCKERHUB_CREDS_USR --password-stdin'
