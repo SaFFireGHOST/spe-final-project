@@ -78,7 +78,18 @@ pipeline {
         script {
           def changedServices = getChangedServices()
           env.SERVICES_TO_BUILD = changedServices.join(',')
-          echo "Services to build: ${env.SERVICES_TO_BUILD}"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🔍 SERVICES TO BUILD:"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          if (changedServices.size() > 0) {
+            changedServices.each { svc ->
+              echo "  ✓ ${svc}"
+            }
+          } else {
+            echo "  ⚠ No services to build (no changes detected)"
+          }
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "Services list: ${env.SERVICES_TO_BUILD}"
         }
       }
     }
