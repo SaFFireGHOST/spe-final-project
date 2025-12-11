@@ -1,0 +1,3 @@
+---
+- name: Deploy ELK Stack
+  command: kubectl apply -f ../k8s/elk/

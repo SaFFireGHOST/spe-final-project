@@ -3,6 +3,21 @@
 - name: Deploy LastMile Application
   hosts: localhost
   connection: local
+  roles:
+    - role: playbooks/roles/kubectl-setup
+      when: manage_minikube | default(true) | bool
+    
+    - role: playbooks/roles/k8s-namespace
+    
+    - role: playbooks/roles/k8s-secrets
+    
+    - role: playbooks/roles/app-deploy
+    
+    - role: playbooks/roles/elk-deploy
+    
+    - role: playbooks/roles/k8s-update-images
+      when: deploy_services is defined and deploy_services != ''
+  
   tasks:
     - name: Check if Minikube is running
       command: minikube status
@@ -14,69 +29,3 @@
       command: minikube delete
       when: (manage_minikube | default(true) | bool) and (minikube_check.rc is defined and minikube_check.rc != 0)
 
-    - name: Check if kubectl is installed
-      command: kubectl version --client
-      register: kubectl_check
-      ignore_errors: yes
-
-    - name: Install kubectl if not installed
-      block:
-        - name: Download kubectl
-          get_url:
-            url: "https://dl.k8s.io/release/{{ lookup('url', 'https://dl.k8s.io/release/stable.txt') }}/bin/linux/amd64/kubectl"
-            dest: /tmp/kubectl
-            mode: '0755'
-        
-        - name: Move kubectl to /usr/local/bin
-          become: yes
-          command: mv /tmp/kubectl /usr/local/bin/kubectl
-      when: kubectl_check.rc != 0
-
-
-
-    - name: Create Namespace
-      command: kubectl apply -f ../k8s/namespace.yaml
-
-
-    - name: Include Vault Secrets
-      include_vars:
-        file: secrets.yml
-
-    - name: Create Gateway Secret
-      shell: kubectl create secret generic gateway-secrets --from-literal=MONGO_URI={{ mongo_uri }} --dry-run=client -o yaml | kubectl apply -f - -n lastmile
-
-    - name: Deploy Backend Services
-      command: kubectl apply -n lastmile -f ../k8s/
-
-    - name: Update Service Images
-      command: >
-        kubectl set image deployment/{{ item }} {{ item }}={{ registry | default('docker.io/youruser') }}/{{ item }}:{{ image_tag | default('latest') }} -n lastmile
-      loop:
-        - user-svc
-        - station-svc
-        - driver-svc
-        - rider-svc
-        - trip-svc
-        - notification-svc
-        - matching-svc
-        - location-svc
-      register: result
-      until: result.rc == 0
-      retries: 5
-      delay: 10
-
-    - name: Update Gateway Image
-      command: >
-        kubectl set image deployment/gateway gateway={{ registry | default('docker.io/youruser') }}/gateway-svc:{{ image_tag | default('latest') }} -n lastmile
-      register: result
-      until: result.rc == 0
-      retries: 5
-      delay: 10
-
-    - name: Update Frontend Image
-      command: >
-        kubectl set image deployment/frontend frontend={{ registry | default('docker.io/youruser') }}/lastmile-frontend:{{ image_tag | default('latest') }} -n lastmile
-      register: result
-      until: result.rc == 0
-      retries: 5
-      delay: 10

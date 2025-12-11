@@ -1,0 +1,7 @@
+---
+- name: Include Vault Secrets
+  include_vars:
+    file: "{{ playbook_dir }}/../secrets.yml"
+
+- name: Create Gateway Secret
+  shell: kubectl create secret generic gateway-secrets --from-literal=MONGO_URI={{ mongo_uri }} --dry-run=client -o yaml | kubectl apply -f - -n lastmile
