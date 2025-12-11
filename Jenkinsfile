@@ -150,7 +150,7 @@ pipeline {
       when { expression { return env.SERVICES_TO_BUILD != '' } }
       steps {
         script {
-          sh "echo $DOCKERHUB_CREDS_PSW | docker login -u $DOCKERHUB_CREDS_USR --password-stdin"
+          sh 'echo $DOCKERHUB_CREDS_PSW | docker login -u $DOCKERHUB_CREDS_USR --password-stdin'
           
           def targets = env.SERVICES_TO_BUILD.split(',')
           def pushes = [:]

@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: user-svc
-        image: user-svc:latest
+        image: ${REGISTRY}/user-svc:latest
         imagePullPolicy: IfNotPresent
         command: ["python", "services/user_svc.py"]
         env:
@@ -48,7 +48,7 @@ spec:
     spec:
       containers:
       - name: station-svc
-        image: station-svc:latest
+        image: ${REGISTRY}/station-svc:latest
         imagePullPolicy: IfNotPresent
         command: ["python", "services/station_svc.py"]
         env:
@@ -82,7 +82,7 @@ spec:
     spec:
       containers:
       - name: driver-svc
-        image: driver-svc:latest
+        image: ${REGISTRY}/driver-svc:latest
         imagePullPolicy: IfNotPresent
         command: ["python", "services/driver_svc.py"]
         env:
@@ -116,7 +116,7 @@ spec:
     spec:
       containers:
       - name: rider-svc
-        image: rider-svc:latest
+        image: ${REGISTRY}/rider-svc:latest
         imagePullPolicy: IfNotPresent
         command: ["python", "services/rider_svc.py"]
         env:
@@ -150,7 +150,7 @@ spec:
     spec:
       containers:
       - name: trip-svc
-        image: trip-svc:latest
+        image: ${REGISTRY}/trip-svc:latest
         imagePullPolicy: IfNotPresent
         command: ["python", "services/trip_svc.py"]
         env:
@@ -186,7 +186,7 @@ spec:
     spec:
       containers:
       - name: notification-svc
-        image: notification-svc:latest
+        image: ${REGISTRY}/notification-svc:latest
         imagePullPolicy: IfNotPresent
         command: ["python", "services/notification_svc.py"]
         env:
@@ -220,7 +220,7 @@ spec:
     spec:
       containers:
       - name: matching-svc
-        image: matching-svc:latest
+        image: ${REGISTRY}/matching-svc:latest
         imagePullPolicy: IfNotPresent
         command: ["python", "services/matching_svc.py"]
         env:
@@ -267,7 +267,7 @@ spec:
     spec:
       containers:
       - name: location-svc
-        image: location-svc:latest
+        image: ${REGISTRY}/location-svc:latest
         imagePullPolicy: IfNotPresent
         command: ["python", "services/location_svc.py"]
         env:

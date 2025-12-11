@@ -15,4 +15,3 @@ spec:
           value: "mongodb://mongo:27017"
       restartPolicy: OnFailure
   backoffLimit: 4
-

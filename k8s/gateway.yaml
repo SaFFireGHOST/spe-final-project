@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: gateway
-        image: gateway-svc:latest
+        image: ${REGISTRY}/gateway-svc:latest
         imagePullPolicy: IfNotPresent
         command: ["python", "gateway.py"]
         env:
