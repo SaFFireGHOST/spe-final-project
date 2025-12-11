@@ -64,7 +64,6 @@ pipeline {
 
 
 
-
     stage('SAST & Secret Scan') {
       steps {
         sh ". .venv/bin/activate && pip install bandit pip-audit"

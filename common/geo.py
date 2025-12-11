@@ -1,6 +1,5 @@
 import math
 from dataclasses import dataclass
-#hello hi
 @dataclass
 class LatLng:
     lat: float
