@@ -174,50 +174,6 @@ pipeline {
       }
     }
 
-    // stage('Deploy to Kubernetes') {
-    //   steps {
-    //     script {
-    //       echo "Using kubeconfig at: $KUBECONFIG"
-
-    //       sh '''
-    //         # Ensure kubectl can talk to the cluster
-    //         kubectl cluster-info
-
-    //         # Create namespace only if not exists
-    //         kubectl get namespace lastmile || kubectl create namespace lastmile
-
-    //         # Deploy all manifests (fast, declarative)
-    //         for file in k8s/*.yaml; do
-    //           echo "Applying $file"
-    //           kubectl apply -n lastmile -f $file
-    //         done
-    //       '''
-          
-    //       // Only update images for services that were rebuilt
-    //       def targets = env.SERVICES_TO_BUILD.split(',')
-          
-    //       if (targets.length > 0) {
-    //           echo "Updating images for: ${env.SERVICES_TO_BUILD}"
-    //           targets.each { svc ->
-    //               // Handle special case for frontend deployment name if needed, but here it matches
-    //               // Also handle init-db job separately if needed, but jobs are immutable so usually we delete/recreate or just let the new image be used next run
-    //               if (svc == 'init-db') {
-    //                   // For jobs, we might want to delete the old one to trigger a new run, or just leave it
-    //                   sh "kubectl delete job init-db-job -n lastmile --ignore-not-found=true"
-    //                   sh "kubectl apply -f k8s/init-db-job.yaml -n lastmile"
-    //               } else {
-    //                   sh "kubectl set image deployment/${svc} ${svc}=${REGISTRY}/${svc}:${IMAGE_TAG} -n lastmile || true"
-    //               }
-    //           }
-    //           echo "Deployment updates complete!"
-    //       } else {
-    //           echo "No services rebuilt, skipping image updates."
-    //       }
-    //     }
-    //   }
-    // }
-
-
 
   }
 
