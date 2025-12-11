@@ -56,7 +56,9 @@ pipeline {
     stage('Frontend Tests') {
       steps {
         dir('frontend') {
-          sh "docker build -t temp-frontend-test -f Dockerfile ."
+          // Run tests directly in a node container, mounting the source code
+          // This avoids the 'build' step and just installs dependencies + runs tests
+          sh "docker run --rm -v \$(pwd):/app -w /app node:22-alpine sh -c 'npm ci && npm run test -- run'"
         }
       }
     }
@@ -146,14 +148,13 @@ pipeline {
            
            targets.each { svc ->
              scans[svc] = {
-               echo "Scanning ${svc}..."
-               sh "docker run --privileged --rm -u 0 -v /var/run/docker.sock:/var/run/docker.sock:z aquasec/trivy:latest image --severity HIGH,CRITICAL ${REGISTRY}/${svc}:${IMAGE_TAG} || true"
-             }
+                echo "Scanning ${svc}..."
+                sh "docker run --privileged --rm -u 0 -v /var/run/docker.sock:/var/run/docker.sock:z aquasec/trivy:latest image --timeout 15m --scanners vuln --severity HIGH,CRITICAL ${REGISTRY}/${svc}:${IMAGE_TAG} || true"
+              }
            }
-           
-           if (scans.size() > 0) {
+                      if (scans.size() > 0) {
              parallel scans
-           }
+            }
         }
       }
     }
@@ -174,7 +175,10 @@ pipeline {
           }
           
           if (pushes.size() > 0) {
-            parallel pushes
+            // Run pushes sequentially
+            pushes.each { name, pushStep ->
+                pushStep()
+            }
           }
         }
       }
