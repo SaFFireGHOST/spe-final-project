@@ -7,6 +7,7 @@ pipeline {
     IMAGE_TAG = "${env.BUILD_NUMBER}"
     PYTHON_VERSION = "3"
     // Point to the user's kubeconfig so Jenkins deploys to the SAME cluster
+    // comment check 
     KUBECONFIG = "/var/lib/jenkins/.kube/config"
   }
 

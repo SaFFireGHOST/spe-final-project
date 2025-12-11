@@ -1,0 +1,2 @@
+minikube service frontend -n lastmile
+kubectl port-forward svc/gateway 5000:5000 -n lastmile
