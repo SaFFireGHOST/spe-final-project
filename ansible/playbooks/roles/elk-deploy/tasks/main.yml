@@ -1,3 +1,3 @@
 ---
 - name: Deploy ELK Stack
-  command: kubectl apply -f {{ playbook_dir }}/../k8s/elk/ -n lastmile
+  shell: kubectl apply -f "{{ playbook_dir }}/../k8s/elk/" -n lastmile
