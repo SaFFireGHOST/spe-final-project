@@ -37,12 +37,6 @@
     - name: Create Namespace
       command: kubectl apply -f ../k8s/namespace.yaml
 
-    - name: Create ELK Namespace
-      command: kubectl create namespace elk
-      ignore_errors: yes
-
-    - name: Deploy ELK Stack
-      command: kubectl apply -f ../k8s/elk/
 
     - name: Include Vault Secrets
       include_vars:
@@ -56,7 +50,7 @@
 
     - name: Update Service Images
       command: >
-        kubectl set image deployment/{{ item }} {{ item }}={{ registry }}/{{ item }}:{{ image_tag }} -n lastmile
+        kubectl set image deployment/{{ item }} {{ item }}={{ registry | default('docker.io/youruser') }}/{{ item }}:{{ image_tag | default('latest') }} -n lastmile
       loop:
         - user-svc
         - station-svc
@@ -66,9 +60,6 @@
         - notification-svc
         - matching-svc
         - location-svc
-      vars:
-        registry: "{{ registry | default('docker.io/harsh2835') }}"
-        image_tag: "{{ image_tag | default('latest') }}"
       register: result
       until: result.rc == 0
       retries: 5
@@ -76,10 +67,7 @@
 
     - name: Update Gateway Image
       command: >
-        kubectl set image deployment/gateway gateway={{ registry }}/gateway-svc:{{ image_tag }} -n lastmile
-      vars:
-        registry: "{{ registry | default('docker.io/harsh2835') }}"
-        image_tag: "{{ image_tag | default('latest') }}"
+        kubectl set image deployment/gateway gateway={{ registry | default('docker.io/youruser') }}/gateway-svc:{{ image_tag | default('latest') }} -n lastmile
       register: result
       until: result.rc == 0
       retries: 5
@@ -87,10 +75,7 @@
 
     - name: Update Frontend Image
       command: >
-        kubectl set image deployment/frontend frontend={{ registry }}/lastmile-frontend:{{ image_tag }} -n lastmile
-      vars:
-        registry: "{{ registry | default('docker.io/harsh2835') }}"
-        image_tag: "{{ image_tag | default('latest') }}"
+        kubectl set image deployment/frontend frontend={{ registry | default('docker.io/youruser') }}/lastmile-frontend:{{ image_tag | default('latest') }} -n lastmile
       register: result
       until: result.rc == 0
       retries: 5

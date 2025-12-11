@@ -7,7 +7,7 @@ pipeline {
     IMAGE_TAG = "${env.BUILD_NUMBER}"
     PYTHON_VERSION = "3"
     // Point to the user's kubeconfig so Jenkins deploys to the SAME cluster
-    KUBECONFIG = "/home/harsh2835/.kube/config"
+    KUBECONFIG = "/var/lib/jenkins/.kube/config"
   }
 
   triggers {
@@ -72,7 +72,18 @@ pipeline {
       }
     }
 
+    stage('Check Changes') {
+      steps {
+        script {
+          def changedServices = getChangedServices()
+          env.SERVICES_TO_BUILD = changedServices.join(',')
+          echo "Services to build: ${env.SERVICES_TO_BUILD}"
+        }
+      }
+    }
+
     stage('Build Images') {
+      when { expression { return env.SERVICES_TO_BUILD != '' } }
       steps {
         script {
           def svcFiles = [
@@ -84,60 +95,75 @@ pipeline {
             'notification-svc': 'Dockerfile.notification',
             'matching-svc': 'Dockerfile.matching',
             'location-svc': 'Dockerfile.location',
-            'gateway-svc': 'Dockerfile.gateway'
+            'gateway-svc': 'Dockerfile.gateway',
+            'init-db': 'Dockerfile.init'
           ]
           
           def builds = [:]
+          def targets = env.SERVICES_TO_BUILD.split(',')
           
           svcFiles.each { name, dockerfile ->
-            builds[name] = {
-              sh "docker build -f ${dockerfile} -t ${REGISTRY}/${name}:${IMAGE_TAG} -t ${REGISTRY}/${name}:latest ."
+            if (targets.contains(name)) {
+                builds[name] = {
+                  sh "docker build -f ${dockerfile} -t ${REGISTRY}/${name}:${IMAGE_TAG} -t ${REGISTRY}/${name}:latest ."
+                }
             }
           }
           
-          builds['lastmile-frontend'] = {
-            sh "docker build -t ${REGISTRY}/lastmile-frontend:${IMAGE_TAG} -t ${REGISTRY}/lastmile-frontend:latest -f frontend/Dockerfile frontend"
+          if (targets.contains('lastmile-frontend')) {
+              builds['lastmile-frontend'] = {
+                sh "docker build -t ${REGISTRY}/lastmile-frontend:${IMAGE_TAG} -t ${REGISTRY}/lastmile-frontend:latest -f frontend/Dockerfile frontend"
+              }
           }
           
-          parallel builds
+          if (builds.size() > 0) {
+            parallel builds
+          } else {
+            echo "No services to build."
+          }
         }
       }
     }
 
     stage('Container Scan (Trivy)') {
+      when { expression { return env.SERVICES_TO_BUILD != '' } }
       steps {
         script {
-           def services = ['user-svc', 'station-svc', 'driver-svc', 'rider-svc', 'trip-svc', 'notification-svc', 'matching-svc', 'location-svc', 'gateway-svc']
+           def targets = env.SERVICES_TO_BUILD.split(',')
            def scans = [:]
            
-           services.each { svc ->
+           targets.each { svc ->
              scans[svc] = {
                echo "Scanning ${svc}..."
-               // Added --user 0, :z, and --privileged to fix permission issues
                sh "docker run --privileged --rm -u 0 -v /var/run/docker.sock:/var/run/docker.sock:z aquasec/trivy:latest image --severity HIGH,CRITICAL ${REGISTRY}/${svc}:${IMAGE_TAG} || true"
              }
            }
            
-           parallel scans
+           if (scans.size() > 0) {
+             parallel scans
+           }
         }
       }
     }
 
     stage('Push Images') {
+      when { expression { return env.SERVICES_TO_BUILD != '' } }
       steps {
         script {
           sh "echo $DOCKERHUB_CREDS_PSW | docker login -u $DOCKERHUB_CREDS_USR --password-stdin"
           
-          def images = ['user-svc', 'station-svc', 'driver-svc', 'rider-svc', 'trip-svc', 'notification-svc', 'matching-svc', 'location-svc', 'gateway-svc', 'lastmile-frontend']
+          def targets = env.SERVICES_TO_BUILD.split(',')
           def pushes = [:]
           
-          images.each { img ->
+          targets.each { img ->
             pushes[img] = {
               sh "docker push ${REGISTRY}/${img}:${IMAGE_TAG} && docker push ${REGISTRY}/${img}:latest"
             }
           }
           
-          parallel pushes
+          if (pushes.size() > 0) {
+            parallel pushes
+          }
         }
       }
     }
@@ -145,46 +171,48 @@ pipeline {
     stage('Deploy to Kubernetes') {
       steps {
         script {
-          // Jenkins builds run outside the cluster, so we use kubectl directly
-          // kubectl should already be configured on the Jenkins agent
+          echo "Using kubeconfig at: $KUBECONFIG"
+
+          sh '''
+            # Ensure kubectl can talk to the cluster
+            kubectl cluster-info
+
+            # Create namespace only if not exists
+            kubectl get namespace lastmile || kubectl create namespace lastmile
+
+            # Deploy all manifests (fast, declarative)
+            for file in k8s/*.yaml; do
+              echo "Applying $file"
+              kubectl apply -n lastmile -f $file
+            done
+          '''
           
-          // Create namespace if it doesn't exist
-          sh "kubectl create namespace lastmile --dry-run=client -o yaml | kubectl apply -f -"
+          // Only update images for services that were rebuilt
+          def targets = env.SERVICES_TO_BUILD.split(',')
           
-          // Apply all Kubernetes manifests
-          sh "kubectl apply -n lastmile -f k8s/ || true"
-          
-          // Create gateway secrets if they don't exist
-          sh """
-            kubectl create secret generic gateway-secrets \
-              --from-literal=MONGO_URI='mongodb://mongo:27017/lastmile' \
-              -n lastmile --dry-run=client -o yaml | kubectl apply -f -
-          """
-          
-          // Update all service images to the newly built version
-          def services = ['user-svc', 'station-svc', 'driver-svc', 'rider-svc', 'trip-svc', 'notification-svc', 'matching-svc', 'location-svc', 'gateway']
-          def updates = [:]
-          
-          services.each { svc ->
-            updates[svc] = {
-              // For gateway, the container name is 'gateway' but image is 'gateway-svc'
-              def imageName = (svc == 'gateway') ? 'gateway-svc' : svc
-              sh "kubectl set image deployment/${svc} ${svc}=${REGISTRY}/${imageName}:${IMAGE_TAG} -n lastmile"
-            }
+          if (targets.length > 0) {
+              echo "Updating images for: ${env.SERVICES_TO_BUILD}"
+              targets.each { svc ->
+                  // Handle special case for frontend deployment name if needed, but here it matches
+                  // Also handle init-db job separately if needed, but jobs are immutable so usually we delete/recreate or just let the new image be used next run
+                  if (svc == 'init-db') {
+                      // For jobs, we might want to delete the old one to trigger a new run, or just leave it
+                      sh "kubectl delete job init-db-job -n lastmile --ignore-not-found=true"
+                      sh "kubectl apply -f k8s/init-db-job.yaml -n lastmile"
+                  } else {
+                      sh "kubectl set image deployment/${svc} ${svc}=${REGISTRY}/${svc}:${IMAGE_TAG} -n lastmile || true"
+                  }
+              }
+              echo "Deployment updates complete!"
+          } else {
+              echo "No services rebuilt, skipping image updates."
           }
-          
-          updates['frontend'] = {
-            sh "kubectl set image deployment/frontend frontend=${REGISTRY}/lastmile-frontend:${IMAGE_TAG} -n lastmile"
-          }
-          
-          parallel updates
-          
-          // Wait for critical services to be ready
-          sh "kubectl rollout status deployment/gateway -n lastmile --timeout=180s"
-          sh "kubectl rollout status deployment/frontend -n lastmile --timeout=180s"
         }
       }
     }
+
+
+
   }
 
   post {
@@ -192,4 +220,86 @@ pipeline {
       cleanWs()
     }
   }
+}
+
+// Helper function to detect changed services
+def getChangedServices() {
+    def allServices = ['user-svc', 'station-svc', 'driver-svc', 'rider-svc', 'trip-svc', 'notification-svc', 'matching-svc', 'location-svc', 'gateway-svc', 'lastmile-frontend', 'init-db']
+    
+    // Debugging: Print commit info
+    echo "Current Commit: ${env.GIT_COMMIT}"
+    echo "Previous Commit (Env): ${env.GIT_PREVIOUS_COMMIT}"
+
+    def previousCommit = env.GIT_PREVIOUS_COMMIT
+    
+    // Fallback: If env var is missing, try to get the previous commit from git history
+    if (previousCommit == null || previousCommit == '') {
+        try {
+            // Check if we have enough depth
+            previousCommit = sh(script: "git rev-parse HEAD^", returnStdout: true).trim()
+            echo "Previous Commit (Git fallback): ${previousCommit}"
+        } catch (Exception e) {
+            echo "Could not determine previous commit via git: ${e.message}"
+        }
+    }
+
+    // If still null, build all
+    if (previousCommit == null || previousCommit == '') {
+        echo "No previous commit found. Building all services."
+        return allServices
+    }
+
+    def currentCommit = env.GIT_COMMIT
+    if (currentCommit == null || currentCommit == '') {
+        try {
+            currentCommit = sh(script: "git rev-parse HEAD", returnStdout: true).trim()
+            echo "Current Commit (Git fallback): ${currentCommit}"
+        } catch (Exception e) {
+            echo "Could not determine current commit: ${e.message}"
+            return allServices
+        }
+    }
+
+    try {
+        def changedFiles = sh(script: "git diff --name-only ${previousCommit} ${currentCommit}", returnStdout: true).trim().split('\n')
+        echo "Changed files: ${changedFiles}"
+        
+        def changedServices = [] as Set
+
+        for (file in changedFiles) {
+            if (file.startsWith('common/') || file == 'pyproject.toml' || file == 'Jenkinsfile' || file.startsWith('ansible/')) {
+                echo "Shared code changed (${file}). Building all backend services."
+                return allServices
+            }
+            
+            if (file.startsWith('frontend/')) {
+                changedServices.add('lastmile-frontend')
+            } else if (file.startsWith('services/user') || file == 'Dockerfile.user') {
+                changedServices.add('user-svc')
+            } else if (file.startsWith('services/station') || file == 'Dockerfile.station') {
+                changedServices.add('station-svc')
+            } else if (file.startsWith('services/driver') || file == 'Dockerfile.driver') {
+                changedServices.add('driver-svc')
+            } else if (file.startsWith('services/rider') || file == 'Dockerfile.rider') {
+                changedServices.add('rider-svc')
+            } else if (file.startsWith('services/trip') || file == 'Dockerfile.trip') {
+                changedServices.add('trip-svc')
+            } else if (file.startsWith('services/notification') || file == 'Dockerfile.notification') {
+                changedServices.add('notification-svc')
+            } else if (file.startsWith('services/matching') || file == 'Dockerfile.matching') {
+                changedServices.add('matching-svc')
+            } else if (file.startsWith('services/location') || file == 'Dockerfile.location') {
+                changedServices.add('location-svc')
+            } else if (file == 'gateway.py' || file == 'Dockerfile.gateway') {
+                changedServices.add('gateway-svc')
+            } else if (file == 'scripts/init_db.py' || file == 'Dockerfile.init') {
+                changedServices.add('init-db')
+            }
+        }
+        
+        return changedServices.toList()
+    } catch (Exception e) {
+        echo "Error detecting changes: ${e.message}. Fallback to building all."
+        return allServices
+    }
 }
