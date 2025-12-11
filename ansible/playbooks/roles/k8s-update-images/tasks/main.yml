@@ -1,0 +1,42 @@
+---
+- name: Update Service Images
+  command: >
+    kubectl set image deployment/{{ item }} {{ item }}={{ registry | default('docker.io/youruser') }}/{{ item }}:{{ image_tag | default('latest') }} -n lastmile
+  loop: "{{ deploy_services.split(',') }}"
+  when: 
+    - item != 'gateway-svc'
+    - item != 'lastmile-frontend'
+    - item != 'init-db'
+    - item in ['user-svc', 'station-svc', 'driver-svc', 'rider-svc', 'trip-svc', 'notification-svc', 'matching-svc', 'location-svc']
+  register: result
+  until: result.rc == 0
+  retries: 5
+  delay: 10
+  ignore_errors: yes
+
+- name: Update Gateway Image
+  command: >
+    kubectl set image deployment/gateway gateway={{ registry | default('docker.io/youruser') }}/gateway-svc:{{ image_tag | default('latest') }} -n lastmile
+  when: "'gateway-svc' in deploy_services.split(',')"
+  register: result
+  until: result.rc == 0
+  retries: 5
+  delay: 10
+
+- name: Update Frontend Image
+  command: >
+    kubectl set image deployment/frontend frontend={{ registry | default('docker.io/youruser') }}/lastmile-frontend:{{ image_tag | default('latest') }} -n lastmile
+  when: "'lastmile-frontend' in deploy_services.split(',')"
+  register: result
+  until: result.rc == 0
+  retries: 5
+  delay: 10
+
+- name: Handle Init DB Job
+  block:
+    - name: Delete existing init-db job
+      command: kubectl delete job init-db-job -n lastmile --ignore-not-found=true
+    
+    - name: Apply init-db job
+      command: kubectl apply -f ../k8s/init-db-job.yaml -n lastmile
+  when: "'init-db' in deploy_services.split(',')"
