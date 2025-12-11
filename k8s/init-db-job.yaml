@@ -7,7 +7,7 @@ spec:
     spec:
       containers:
       - name: init-db
-        image: init-db:latest
+        image: ${REGISTRY}/init-db:latest
         imagePullPolicy: IfNotPresent
         command: ["python", "scripts/init_db.py"]
         env:

@@ -150,7 +150,7 @@ pipeline {
       when { expression { return env.SERVICES_TO_BUILD != '' } }
       steps {
         script {
-          sh "echo $DOCKERHUB_CREDS_PSW | docker login -u $DOCKERHUB_CREDS_USR --password-stdin"
+          sh 'echo $DOCKERHUB_CREDS_PSW | docker login -u $DOCKERHUB_CREDS_USR --password-stdin'
           
           def targets = env.SERVICES_TO_BUILD.split(',')
           def pushes = [:]
@@ -183,7 +183,7 @@ pipeline {
             # Deploy all manifests (fast, declarative)
             for file in k8s/*.yaml; do
               echo "Applying $file"
-              kubectl apply -n lastmile -f $file
+              envsubst '${REGISTRY}' < $file | kubectl apply -n lastmile -f -
             done
           '''
           
