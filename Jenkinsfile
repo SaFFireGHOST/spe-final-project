@@ -57,8 +57,8 @@ pipeline {
       steps {
         dir('frontend') {
           // Run tests directly in a node container (like a virtual env) without building a custom image
-          // This avoids the 'build' step and just installs dependencies + runs tests
-          sh "docker run --rm -v \$(pwd):/app -w /app node:22-alpine sh -c 'npm ci && npm run test -- run'"
+          // Using 'install' instead of 'ci' because package-lock.json might be missing
+          sh "docker run --rm -v \$(pwd):/app -w /app node:22-alpine sh -c 'npm install && npm run test -- run'"
         }
       }
     }
