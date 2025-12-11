@@ -35,6 +35,11 @@ spec:
             secretKeyRef:
               name: gateway-secrets
               key: MONGO_URI
+        resources:
+          requests:
+            cpu: "100m"
+          limits:
+            cpu: "200m"
 ---
 apiVersion: v1
 kind: Service
