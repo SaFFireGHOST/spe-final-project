@@ -1,3 +1,9 @@
 ---
 - name: Deploy Backend Services
-  command: kubectl apply -n lastmile -f ../k8s/
+  shell: |
+    for f in ../k8s/*.yaml; do
+      envsubst < $f | kubectl apply -n lastmile -f -
+    done
+  environment:
+    REGISTRY: "{{ registry | default('docker.io/harsh2835') }}"
+    IMAGE_TAG: "{{ image_tag | default('latest') }}"
