@@ -56,11 +56,17 @@ pipeline {
     stage('Frontend Tests') {
       steps {
         dir('frontend') {
-          // Run tests locally as requested, since npm/node are available on the host
-          sh "npm install && npm run test -- run"
+          sh """
+            docker run --rm \
+              -v "\$PWD":/app \
+              -w /app \
+              node:20 \
+              sh -c "npm ci && npm test"
+          """
         }
       }
     }
+
 
 
 

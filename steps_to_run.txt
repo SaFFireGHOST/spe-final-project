@@ -1,104 +1,15 @@
-# Steps to Run and Verify
+1 . minikube start
+2 . Run jenkins pipeline ( checkout → venv setup → tests → Bandit/Gitleaks/pip-audit → 
+      build images → Trivy scan → push images → `kubectl apply` + `set image` in `default` namespace. Green build indicates deploy succeeded.
+3. kubectl config set-context --current --namespace=lastmile
+4. kubectl get pods -w (live view of pods)
+5.  kubectl port-forward svc/gateway 5000:5000
+6.  minikube service frontend -n lastmile
+7.  kubectl get hpa -w
+8.  kubectl port-forward svc/matching-svc 50057:50057 &
+python3 scripts/load_gen.py  (for hpa demo with matching service)
+9.  kubectl delete pod -l app=station-svc (for fault tolerance demo)
+10.  kubectl port-forward svc/kibana 5601:5601 ( Access Kibana - Login with Username: `elastic` Password: `password123`)
 
-## A. Local (Docker Compose)
-1) Prereqs: Docker (with compose plugin), Node 18+ if building frontend locally.
-2) Run:
-   ```bash
-   docker compose up --build
-   ```
-3) Expected outputs:
-   - Containers healthy; `docker compose ps` shows all `Up`.
-   - Gateway logs show `* Running on http://0.0.0.0:5000`.
-   - Frontend reachable at http://localhost:3000.
-4) Quick check: `curl http://localhost:5000/health` returns `{"status":"ok"}`.
+Expected: Filebeat ships container logs; discover index `filebeat-*` in Kibana and see  logs.
 
-## B. Testing
-1) Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   pip install pytest
-   ```
-2) Run tests:
-   ```bash
-   pytest tests/
-   ```
-
-## C. Kubernetes (full stack)
-1) Prereqs: `kubectl`, Kubernetes cluster (Minikube/Kind/remote), Docker.
-2) Build and (if Minikube) load images:
-   ```bash
-   ./build_images.sh
-   # Minikube only
-   ./load_images_minikube.sh
-   ```
-3) Deploy namespace and manifests:
-   ```bash
-   kubectl apply -f k8s
-   ```
-4) Wait for readiness:
-   ```bash
-   kubectl get pods -w
-   ```
-   Expected: all pods reach `Running` with `1/1` ready.
-5) Init data (stations):
-   ```bash
-   kubectl port-forward svc/mongo 27019:27017
-   python3 scripts/init_db.py
-   ```
-   Expected: script prints inserted station count; no exceptions.
-6) Access:
-   - Frontend: `minikube service frontend` or NodePort IP: `http://<minikube-ip>:30081`.
-   - Gateway: `kubectl port-forward svc/gateway 5000:5000` → http://localhost:5000
-   - Health check: `curl http://localhost:5000/health` → `{"status":"ok"}`.
-7) HPA demo (matching-svc):
-   ```bash
-   kubectl get hpa -w
-   kubectl port-forward svc/matching-svc 50057:50057 &
-   python3 scripts/load_gen.py
-   ```
-   Expected: HPA `REPLICAS` scales above 1 under load, then scales down after load stops.
-8) Fault tolerance demo:
-   ```bash
-   kubectl delete pod -l app=station-svc
-   ```
-   Expected: pod recreated automatically; `kubectl get pods` shows new pod Running; app stays responsive.
-
-## D. CI/CD (Jenkins pipeline)
-1) Create Jenkins job using repo `Jenkinsfile`.
-2) Credentials required:
-   - `dockerhub-credentials` (user/pass)
-   - `kubeconfig` (secret file credential)
-3) GitHub webhook: `http://<jenkins-url>/github-webhook/`.
-4) Expected pipeline flow: checkout → venv setup → tests → Bandit/Gitleaks/pip-audit → build images → Trivy scan → push images → `kubectl apply` + `set image` in `default` namespace. Green build indicates deploy succeeded.
-
-## E. Ansible provisioning (optional)
-Run infra + app provisioning from your control host:
-```bash
-ansible-playbook -i ansible/inventory ansible/deploy.yml \
-  --extra-vars "registry=docker.io/saffireghost image_tag=latest" \
-  --vault-password-file ansible/vault_pass.txt
-```
-Expected: Docker/Jenkins/K8s installed, cluster ready, app deployed to `default`; `kubectl get pods` shows pods Running.
-## F. Observability (ELK)
-1) Deploy stack:
-   ```bash
-   kubectl apply -f k8s/elk/
-   ```
-2) Access Kibana:
-   ```bash
-   kubectl port-forward svc/kibana 5601:5601
-   ```
-   Open http://localhost:5601.
-   - Login with:
-     - Username: `elastic`
-     - Password: `password123`
-
-3) Expected: Filebeat ships container logs; discover index `filebeat-*` in Kibana and see gateway/service logs.
-
-## F. Vault-based Secrets (optional)
-1) Ensure Vault injector is installed in cluster.
-2) Apply example:
-   ```bash
-   kubectl apply -f k8s/vault-agent-example.yaml
-   ```
-3) Expected: `gateway-secure` pod runs with injected env file; `kubectl logs deployment/gateway-secure` shows app starting without missing secret errors.
