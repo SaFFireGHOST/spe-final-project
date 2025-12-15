@@ -14,7 +14,7 @@ data:
           templates:
             - condition:
                 equals:
-                  kubernetes.namespace: default
+                  kubernetes.namespace: lastmile
               config:
                 - type: container
                   paths:
@@ -54,7 +54,7 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: filebeat
-    namespace: default
+    namespace: lastmile
 ---
 apiVersion: apps/v1
 kind: DaemonSet
